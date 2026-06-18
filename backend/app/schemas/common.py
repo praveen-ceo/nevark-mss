@@ -1,0 +1,1 @@
+﻿# TODO: Common schemas (pagination, response envelope)
