@@ -12,6 +12,7 @@ const BREADCRUMBS: Record<string, string> = {
   "/employees":    "Employees",
   "/clients":      "Clients",
   "/projects":     "Projects",
+  "/tasks":        "Tasks",
   "/finance":      "Finance",
   "/documents":    "Documents",
   "/ai-assistant": "AI Assistant",
@@ -41,7 +42,7 @@ export function Topbar() {
   const currentPage = BREADCRUMBS[pathname] ?? "Nevark";
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 border-b border-gray-200 bg-white flex-shrink-0">
+    <header className="h-16 flex items-center justify-between px-6 flex-shrink-0 bg-white/90 backdrop-blur-sm" style={{ borderBottom: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
       <div className="flex items-center gap-3">
         <div>
           <p className="text-xs text-gray-400">Nevark MSS</p>

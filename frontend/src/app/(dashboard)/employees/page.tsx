@@ -5,9 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AxiosError } from "axios";
 import {
-  AlertCircle, Building2, CheckCircle2, Download,
+  AlertCircle, Building2, CheckCircle2, ChevronDown, Download,
   Loader2, Pencil, Plus, Search, Trash2, Users, X,
 } from "lucide-react";
+import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
 import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
@@ -391,6 +392,36 @@ export default function EmployeesPage() {
     setToast({ msg, type });
   }
 
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const EXP_HEADERS = ["Code", "Name", "Job Title", "Department", "Type", "Hire Date", "Phone", "Salary", "Status"];
+  function empRows() {
+    return filtered.map(e => [
+      e.employee_code,
+      `${e.first_name} ${e.last_name}`,
+      e.job_title ?? "",
+      e.department?.name ?? "",
+      e.employment_type.replace("_", " "),
+      e.hire_date,
+      e.phone ?? "",
+      e.salary ?? "",
+      e.is_active ? "Active" : "Inactive",
+    ]);
+  }
+
+  async function handleExport(fmt: "csv" | "xlsx" | "pdf") {
+    setExportOpen(false);
+    try {
+      const fname = `nevark-employees-${new Date().toISOString().slice(0, 10)}`;
+      if (fmt === "csv")  exportCSV(fname, EXP_HEADERS, empRows());
+      if (fmt === "xlsx") await exportXLSX(fname, EXP_HEADERS, empRows());
+      if (fmt === "pdf")  await exportPDF(fname, "Nevark MSS — Employee Report", EXP_HEADERS, empRows());
+      showToast(`Exported as ${fmt.toUpperCase()}`, "success");
+    } catch {
+      showToast("Export failed", "error");
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -400,9 +431,28 @@ export default function EmployeesPage() {
           <p className="text-sm text-gray-500">Manage your workforce across all departments</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
-            <Download className="w-4 h-4" />Export
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+            >
+              <Download className="w-4 h-4" />Export
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                  {(["xlsx", "csv", "pdf"] as const).map((fmt) => (
+                    <button key={fmt} onClick={() => handleExport(fmt)}
+                      className="w-full px-4 py-2.5 text-sm text-left text-gray-700 hover:bg-gray-50 transition uppercase font-medium tracking-wide">
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm"

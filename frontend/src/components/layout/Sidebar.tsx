@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,17 +31,22 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[220px] flex-shrink-0 bg-slate-900 flex flex-col border-r border-slate-800">
-      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+    <aside className="w-[228px] flex-shrink-0 flex flex-col"
+      style={{ background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+
+      {/* Logo */}
+      <div className="h-16 flex items-center gap-3 px-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", boxShadow: "0 2px 8px rgba(59,130,246,0.45)" }}>
           <Zap className="w-4 h-4 text-white" />
         </div>
         <div>
-          <p className="text-white font-bold text-sm leading-tight">Nevark</p>
-          <p className="text-slate-500 text-[10px] leading-tight">Enterprise Suite</p>
+          <p className="text-white font-bold text-sm leading-tight tracking-tight">Nevark</p>
+          <p className="text-slate-500 text-[10px] leading-tight tracking-wide uppercase">Enterprise Suite</p>
         </div>
       </div>
 
+      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {NAV.map(({ label, href, icon: Icon, badge }) => {
           const active = pathname.startsWith(href);
@@ -49,29 +54,37 @@ export function Sidebar() {
             <Link key={href} href={href}>
               <motion.div
                 whileHover={{ x: 2 }}
+                transition={{ duration: 0.12 }}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer",
                   active
-                    ? "bg-blue-700 text-white shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "text-white"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
                 )}
+                style={active ? {
+                  background: "linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(29,78,216,0.15) 100%)",
+                  boxShadow: "inset 0 0 0 1px rgba(59,130,246,0.25)",
+                } : undefined}
               >
-                <Icon className="w-4 h-4 flex-shrink-0" />
+                <Icon className={cn("w-4 h-4 flex-shrink-0", active ? "text-blue-400" : "")} />
                 <span className="flex-1">{label}</span>
                 {badge && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-purple-600 text-white rounded-full">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #9333ea)", color: "#fff" }}>
                     {badge}
                   </span>
                 )}
+                {active && <span className="w-1 h-4 rounded-full bg-blue-400 flex-shrink-0" />}
               </motion.div>
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-800 mx-3 mb-3 rounded-xl bg-slate-800">
+      {/* Footer */}
+      <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
         <p className="text-slate-400 text-xs font-medium">Nevark MSS</p>
-        <p className="text-slate-600 text-[10px]">v1.0.0 - Enterprise</p>
+        <p className="text-slate-600 text-[10px]">v1.0.0 · Enterprise</p>
       </div>
     </aside>
   );
