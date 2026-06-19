@@ -57,10 +57,14 @@ class Invoice(BaseModel):
     )
     invoice_number: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[InvoiceStatus] = mapped_column(
-        Enum(InvoiceStatus, name="invoice_status_enum"),
-        default=InvoiceStatus.DRAFT,
-        nullable=False,
-    )
+    Enum(
+        InvoiceStatus,
+        name="invoice_status_enum",
+        values_callable=lambda obj: [e.value for e in obj],
+    ),
+    default=InvoiceStatus.DRAFT,
+    nullable=False,
+)
     issue_date: Mapped[date] = mapped_column(Date, nullable=False)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
     subtotal: Mapped[Numeric] = mapped_column(Numeric(15, 2), nullable=False)
@@ -71,8 +75,18 @@ class Invoice(BaseModel):
     )
     total_amount: Mapped[Numeric] = mapped_column(Numeric(15, 2), nullable=False)
     paid_amount: Mapped[Numeric] = mapped_column(Numeric(15, 2), default=0, nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # GST fields (Option B — stored for audit compliance)
+    cgst_rate: Mapped[Optional[Numeric]] = mapped_column(Numeric(5, 2), nullable=True)
+    sgst_rate: Mapped[Optional[Numeric]] = mapped_column(Numeric(5, 2), nullable=True)
+    igst_rate: Mapped[Optional[Numeric]] = mapped_column(Numeric(5, 2), nullable=True)
+    cgst_amount: Mapped[Optional[Numeric]] = mapped_column(Numeric(15, 2), nullable=True)
+    sgst_amount: Mapped[Optional[Numeric]] = mapped_column(Numeric(15, 2), nullable=True)
+    igst_amount: Mapped[Optional[Numeric]] = mapped_column(Numeric(15, 2), nullable=True)
+    place_of_supply: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    gstin: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     client: Mapped[Client] = relationship("Client", back_populates="invoices")
     project: Mapped[Optional[Project]] = relationship("Project", back_populates="invoices")
@@ -119,14 +133,23 @@ class Payment(BaseModel):
     amount: Mapped[Numeric] = mapped_column(Numeric(15, 2), nullable=False)
     payment_date: Mapped[date] = mapped_column(Date, nullable=False)
     payment_method: Mapped[PaymentMethod] = mapped_column(
-        Enum(PaymentMethod, name="payment_method_enum"), nullable=False
-    )
+    Enum(
+        PaymentMethod,
+        name="payment_method_enum",
+        values_callable=lambda obj: [e.value for e in obj],
+    ),
+    nullable=False,
+)
     reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus, name="payment_status_enum"),
-        default=PaymentStatus.PENDING,
-        nullable=False,
-    )
+    Enum(
+        PaymentStatus,
+        name="payment_status_enum",
+        values_callable=lambda obj: [e.value for e in obj],
+    ),
+    default=PaymentStatus.PENDING,
+    nullable=False,
+)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     invoice: Mapped[Invoice] = relationship("Invoice", back_populates="payments")
@@ -157,18 +180,27 @@ class Expense(BaseModel):
         nullable=True,
     )
     category: Mapped[ExpenseCategory] = mapped_column(
-        Enum(ExpenseCategory, name="expense_category_enum"), nullable=False
-    )
+    Enum(
+        ExpenseCategory,
+        name="expense_category_enum",
+        values_callable=lambda obj: [e.value for e in obj],
+    ),
+    nullable=False,
+)
     amount: Mapped[Numeric] = mapped_column(Numeric(15, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     status: Mapped[ExpenseStatus] = mapped_column(
-        Enum(ExpenseStatus, name="expense_status_enum"),
-        default=ExpenseStatus.PENDING,
-        nullable=False,
-    )
+    Enum(
+        ExpenseStatus,
+        name="expense_status_enum",
+        values_callable=lambda obj: [e.value for e in obj],
+    ),
+    default=ExpenseStatus.PENDING,
+    nullable=False,
+)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     project: Mapped[Optional[Project]] = relationship("Project", back_populates="expenses")

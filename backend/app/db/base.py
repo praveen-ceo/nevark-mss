@@ -6,6 +6,7 @@ from app.models.employee import Attendance, Department, Employee, LeaveRequest  
 from app.models.client import Client, ClientContact  # noqa: F401
 from app.models.project import Milestone, Project, ProjectAssignment, ProjectTask  # noqa: F401
 from app.models.finance import Expense, Invoice, InvoiceItem, Payment  # noqa: F401
+from app.models.settings import FinanceSettings  # noqa: F401
 from app.models.purchase_order import POItem, PurchaseOrder  # noqa: F401
 from app.models.contract import Contract, ContractRisk  # noqa: F401
 from app.models.document import Document, DocumentCategory  # noqa: F401
