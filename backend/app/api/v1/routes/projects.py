@@ -7,6 +7,7 @@ from app.api.deps import CurrentUser, DBDep
 from app.models.enums import ProjectStatus
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services import project as svc
+import app.services.notifications as notif_svc
 
 router = APIRouter()
 
@@ -34,7 +35,12 @@ async def get_project(project_id: uuid.UUID, db: DBDep, _: CurrentUser):
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(data: ProjectCreate, db: DBDep, _: CurrentUser):
     try:
-        return await svc.create_project(db, data)
+        project = await svc.create_project(db, data)
+        try:
+            await notif_svc.push(db, "project", f"New project: {project.name}", entity_id=project.id)
+        except Exception:
+            pass
+        return project
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -49,7 +55,17 @@ async def update_project(
     project_id: uuid.UUID, data: ProjectUpdate, db: DBDep, _: CurrentUser
 ):
     try:
-        return await svc.update_project(db, project_id, data)
+        project = await svc.update_project(db, project_id, data)
+        if data.status is not None:
+            try:
+                await notif_svc.push(
+                    db, "project",
+                    f"Project {project.name} moved to {project.status.value}",
+                    entity_id=project.id,
+                )
+            except Exception:
+                pass
+        return project
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except Exception as exc:

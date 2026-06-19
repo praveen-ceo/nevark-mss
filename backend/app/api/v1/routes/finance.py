@@ -17,6 +17,7 @@ from app.schemas.finance import (
     PaymentCreate,
 )
 from app.services import finance as svc
+import app.services.notifications as notif_svc
 
 router = APIRouter()
 
@@ -115,7 +116,17 @@ async def delete_invoice(invoice_id: uuid.UUID, db: DBDep, _: CurrentUser):
 @router.post("/invoices/{invoice_id}/send", response_model=InvoiceResponse)
 async def send_invoice(invoice_id: uuid.UUID, db: DBDep, _: CurrentUser):
     try:
-        return _enrich_invoice(await svc.send_invoice(db, invoice_id))
+        inv = await svc.send_invoice(db, invoice_id)
+        try:
+            client_name = inv.client.name if inv.client else "client"
+            await notif_svc.push(
+                db, "finance",
+                f"Invoice {inv.invoice_number} sent to {client_name}",
+                entity_id=inv.id,
+            )
+        except Exception:
+            pass
+        return _enrich_invoice(inv)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
@@ -123,7 +134,16 @@ async def send_invoice(invoice_id: uuid.UUID, db: DBDep, _: CurrentUser):
 @router.post("/invoices/{invoice_id}/payments", response_model=InvoiceResponse)
 async def add_payment(invoice_id: uuid.UUID, data: PaymentCreate, db: DBDep, _: CurrentUser):
     try:
-        return _enrich_invoice(await svc.add_payment(db, invoice_id, data))
+        inv = await svc.add_payment(db, invoice_id, data)
+        try:
+            await notif_svc.push(
+                db, "finance",
+                f"Payment received on {inv.invoice_number}: ₹{data.amount}",
+                entity_id=inv.id,
+            )
+        except Exception:
+            pass
+        return _enrich_invoice(inv)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -245,16 +265,13 @@ async def get_dashboard(db: DBDep, _: CurrentUser):
 # ---------------------------------------------------------------------------
 # Internal helper — enrich invoice with computed fields not in ORM
 # ---------------------------------------------------------------------------
-
-def _enrich_invoice(inv) -> dict:
+def _enrich_invoice(inv) -> "InvoiceResponse":
     from decimal import Decimal
-    from app.schemas.finance import InvoiceResponse
 
     paid = Decimal(str(inv.paid_amount or 0))
     total = Decimal(str(inv.total_amount or 0))
     outstanding = (total - paid).quantize(Decimal("0.01"))
 
-    # Derive supply_type
     supply_type = None
     if inv.cgst_rate is not None and inv.cgst_rate > 0:
         supply_type = "intrastate"

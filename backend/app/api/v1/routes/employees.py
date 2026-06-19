@@ -13,6 +13,7 @@ from app.schemas.employee import (
     EmployeeUpdate,
 )
 from app.services import employee as svc
+import app.services.notifications as notif_svc
 
 router = APIRouter()
 
@@ -54,7 +55,13 @@ async def create_employee(
     current_user: CurrentUser,
 ):
     try:
-        return await svc.create_employee(db, data)
+        emp = await svc.create_employee(db, data)
+        try:
+            name = f"{emp.first_name} {emp.last_name}".strip()
+            await notif_svc.push(db, "employee", f"New employee added: {name}", entity_id=emp.id)
+        except Exception:
+            pass
+        return emp
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -75,15 +82,16 @@ async def update_employee(
         return await svc.update_employee(db, employee_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Update failed: {type(exc).__name__}: {exc}",
+        )
 
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_employee(
-    employee_id: uuid.UUID,
-    db: DBDep,
-   current_user: CurrentUser,
-):
+async def deactivate_employee(employee_id: uuid.UUID, db: DBDep, _: CurrentUser):
     try:
-        await svc.delete_employee(db, employee_id)
+        await svc.deactivate_employee(db, employee_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

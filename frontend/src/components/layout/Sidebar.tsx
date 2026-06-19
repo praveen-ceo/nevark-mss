@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BarChart3,
+  Bell,
   Bot,
   Briefcase,
   CheckSquare,
@@ -23,8 +24,9 @@ const NAV = [
   { label: "Projects",     href: "/projects",     icon: BarChart3        },
   { label: "Tasks",        href: "/tasks",        icon: CheckSquare      },
   { label: "Finance",      href: "/finance",      icon: Wallet           },
-  { label: "Documents",    href: "/documents",    icon: FileText         },
-  { label: "AI Assistant", href: "/ai-assistant", icon: Bot, badge: "NEW" },
+  { label: "Documents",      href: "/documents",      icon: FileText         },
+  { label: "Notifications",  href: "/notifications",  icon: Bell             },
+  { label: "AI Assistant",   href: "/ai-assistant",   icon: Bot, badge: "NEW" },
 ];
 
 export function Sidebar() {

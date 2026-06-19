@@ -30,7 +30,7 @@ import { apiClient } from "@/lib/api/client";
 interface StatusCount { status: string; count: number }
 interface EmploymentTypeCount { employment_type: string; count: number }
 interface MonthlyRevenue { month: string; revenue: number; expenses: number; profit: number }
-interface ActivityItem { entity_type: string; entity_id: string; description: string; occurred_at: string }
+interface NotifItem { id: string; entity_type: string; title: string; is_read: boolean; created_at: string }
 interface DeadlineItem { project_id: string; name: string; client_name: string | null; end_date: string; days_left: number; status: string }
 
 interface InvoiceStatusCount { status: string; count: number; total: number }
@@ -56,7 +56,7 @@ interface DashboardAnalytics {
   total_employees: number;
   new_hires_this_month: number;
   employees_by_type: EmploymentTypeCount[];
-  recent_activity: ActivityItem[];
+  recent_activity: NotifItem[];
   upcoming_deadlines: DeadlineItem[];
 }
 
@@ -88,10 +88,12 @@ function urgencyClass(days: number): string {
 
 function entityIcon(type: string) {
   switch (type) {
-    case "invoice": return { Icon: FileText,        color: "text-purple-500 bg-purple-50" };
-    case "project": return { Icon: Briefcase,       color: "text-blue-500 bg-blue-50"    };
-    case "task":    return { Icon: CheckCircle2,    color: "text-emerald-500 bg-emerald-50" };
-    default:        return { Icon: Wallet,          color: "text-teal-500 bg-teal-50"    };
+    case "task":     return { Icon: CheckCircle2, color: "text-emerald-500 bg-emerald-50" };
+    case "project":  return { Icon: Briefcase,    color: "text-blue-500 bg-blue-50"       };
+    case "finance":  return { Icon: Wallet,       color: "text-purple-500 bg-purple-50"   };
+    case "document": return { Icon: FileText,     color: "text-orange-500 bg-orange-50"   };
+    case "employee": return { Icon: Users,        color: "text-teal-500 bg-teal-50"       };
+    default:         return { Icon: Wallet,       color: "text-gray-500 bg-gray-100"      };
   }
 }
 
@@ -115,7 +117,15 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardAnalytics>({
     queryKey: ["analytics-dashboard"],
     queryFn: () => apiClient.get<DashboardAnalytics>("/analytics/dashboard").then((r) => r.data),
-    staleTime: 60_000, // 1 min cache
+    staleTime: 60_000,
+  });
+
+  const { data: feedData, isLoading: feedLoading } = useQuery({
+    queryKey: ["notif-feed"],
+    queryFn: () =>
+      apiClient.get<{ items: NotifItem[] }>("/notifications?limit=10").then((r) => r.data),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   // KPI card data — show skeleton values while loading
@@ -240,31 +250,32 @@ export default function DashboardPage() {
         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">Recent Activity</h3>
-            <Link href="/projects" className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
+            <Link href="/notifications" className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          {isLoading ? (
+          {feedLoading ? (
             <div className="flex items-center justify-center py-8 text-gray-300">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          ) : !data?.recent_activity?.length ? (
+          ) : !feedData?.items?.length ? (
             <p className="text-sm text-gray-400 text-center py-6">No recent activity yet</p>
           ) : (
             <div className="space-y-3">
-              {data.recent_activity.map((a, idx) => {
-                const { Icon, color } = entityIcon(a.entity_type);
+              {feedData.items.map((n) => {
+                const { Icon, color } = entityIcon(n.entity_type);
                 return (
-                  <div key={idx} className="flex items-start gap-3">
+                  <div key={n.id} className={`flex items-start gap-3 ${!n.is_read ? "opacity-100" : "opacity-80"}`}>
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800">{a.description}</p>
+                      <p className={`text-sm ${n.is_read ? "text-gray-600" : "text-gray-800 font-medium"}`}>{n.title}</p>
                       <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />{timeAgo(a.occurred_at)}
+                        <Clock className="w-3 h-3" />{timeAgo(n.created_at)}
                       </p>
                     </div>
+                    {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />}
                   </div>
                 );
               })}

@@ -16,6 +16,7 @@ from app.schemas.tasks import (
     TaskUpdate,
 )
 from app.services import tasks as svc
+import app.services.notifications as notif_svc
 
 router = APIRouter()
 
@@ -55,7 +56,12 @@ async def list_tasks(
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(data: TaskCreate, db: DBDep, _: CurrentUser):
     try:
-        return _enrich(await svc.create_task(db, data))
+        task = await svc.create_task(db, data)
+        try:
+            await notif_svc.push(db, "task", f"New task: {task.title}", entity_id=task.id)
+        except Exception:
+            pass
+        return _enrich(task)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Create failed: {type(exc).__name__}: {exc}")
 
@@ -71,7 +77,13 @@ async def get_task(task_id: uuid.UUID, db: DBDep, _: CurrentUser):
 @router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(task_id: uuid.UUID, data: TaskUpdate, db: DBDep, _: CurrentUser):
     try:
-        return _enrich(await svc.update_task(db, task_id, data))
+        task = await svc.update_task(db, task_id, data)
+        if data.status == TaskStatus.DONE:
+            try:
+                await notif_svc.push(db, "task", f"Task completed: {task.title}", entity_id=task.id)
+            except Exception:
+                pass
+        return _enrich(task)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -115,6 +127,8 @@ async def update_milestone(milestone_id: uuid.UUID, data: MilestoneUpdate, db: D
         return await svc.update_milestone(db, milestone_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Update failed: {type(exc).__name__}: {exc}")
 
 
 @router.post("/milestones/{milestone_id}/complete", response_model=MilestoneResponse)
@@ -122,4 +136,6 @@ async def complete_milestone(milestone_id: uuid.UUID, db: DBDep, _: CurrentUser)
     try:
         return await svc.complete_milestone(db, milestone_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Complete failed: {type(exc).__name__}: {exc}")

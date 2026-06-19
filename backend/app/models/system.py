@@ -5,8 +5,8 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    Enum,
     ForeignKey,
+    Enum,
     Index,
     String,
     Text,
@@ -16,36 +16,29 @@ from sqlalchemy.dialects.postgresql import JSONB, INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
-from app.models.enums import AuditAction, NotificationType
+from app.models.enums import AuditAction
 
 
+# entity_type values: task | project | finance | document | employee | system
 class Notification(BaseModel):
     __tablename__ = "notifications"
     __table_args__ = (
-        Index("ix_notifications_user_id", "user_id"),
-        Index("ix_notifications_is_read", "is_read"),
-        Index("ix_notifications_user_read", "user_id", "is_read"),
+        Index("ix_notifications_recipient_id", "recipient_id"),
+        Index("ix_notifications_recipient_read", "recipient_id", "is_read"),
+        Index("ix_notifications_created_at", "created_at"),
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    # nullable = broadcast (all users); set = targeted delivery
+    recipient_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
-    title: Mapped[str] = mapped_column(String(500), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, name="notification_type_enum"),
-        default=NotificationType.INFO,
-        nullable=False,
-    )
-    # Polymorphic reference to the source entity
-    related_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    related_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    read_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
 
 class AuditLog(BaseModel):

@@ -17,6 +17,7 @@ from app.schemas.documents import (
 )
 from app.services import documents as svc
 from app.services import storage
+import app.services.notifications as notif_svc
 
 router = APIRouter()
 
@@ -128,6 +129,11 @@ async def upload_document(
         storage.delete_object(object_key)
         raise HTTPException(500, detail=f"DB error: {type(exc).__name__}: {exc}")
 
+    try:
+        await notif_svc.push(db, "document", f"Document uploaded: {doc.title}", entity_id=doc.id)
+    except Exception:
+        pass
+
     return _to_response(doc, current_user)
 
 
@@ -166,11 +172,12 @@ async def update_document(
     return _to_response(doc, current_user)
 
 
+
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(doc_id: uuid.UUID, db: DBDep, _: CurrentUser):
     try:
         file_path = await svc.deactivate_document(db, doc_id)
+        if file_path:
+            storage.delete_object(file_path)
     except ValueError as exc:
         raise HTTPException(404, detail=str(exc))
-    # Best-effort MinIO cleanup (non-blocking)
-    storage.delete_object(file_path)
