@@ -229,7 +229,7 @@ class ExpenseUpdate(BaseModel):
     category: Optional[ExpenseCategory] = None
     amount: Optional[Decimal] = None
     currency: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[date] = None 
     description: Optional[str] = None
 
 
