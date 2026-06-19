@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   Area,
@@ -13,38 +13,82 @@ import {
   YAxis,
 } from "recharts";
 
-const MONTHLY = [
-  { month: "Jul", revenue: 380000, expenses: 240000, profit: 140000 },
-  { month: "Aug", revenue: 422000, expenses: 268000, profit: 154000 },
-  { month: "Sep", revenue: 455000, expenses: 285000, profit: 170000 },
-  { month: "Oct", revenue: 512000, expenses: 308000, profit: 204000 },
-  { month: "Nov", revenue: 490000, expenses: 296000, profit: 194000 },
-  { month: "Dec", revenue: 581000, expenses: 332000, profit: 249000 },
-  { month: "Jan", revenue: 624000, expenses: 348000, profit: 276000 },
+// ---------------------------------------------------------------------------
+// Types (matches backend MonthlyRevenue / StatusCount)
+// ---------------------------------------------------------------------------
+export interface MonthlyRevenuePoint {
+  month: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+export interface ProjectStatusPoint {
+  status: string;
+  count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Fallback static data (shown while loading / empty DB)
+// ---------------------------------------------------------------------------
+const FALLBACK_MONTHLY: MonthlyRevenuePoint[] = [
+  { month: "Jan", revenue: 0, expenses: 0, profit: 0 },
+  { month: "Feb", revenue: 0, expenses: 0, profit: 0 },
+  { month: "Mar", revenue: 0, expenses: 0, profit: 0 },
+  { month: "Apr", revenue: 0, expenses: 0, profit: 0 },
+  { month: "May", revenue: 0, expenses: 0, profit: 0 },
+  { month: "Jun", revenue: 0, expenses: 0, profit: 0 },
 ];
 
-const STATUS = [
-  { name: "Planning",    count: 8,  color: "#94a3b8" },
-  { name: "In Progress", count: 18, color: "#3b82f6" },
-  { name: "Review",      count: 7,  color: "#f59e0b" },
-  { name: "Completed",   count: 23, color: "#10b981" },
-  { name: "On Hold",     count: 4,  color: "#ef4444" },
+const FALLBACK_STATUS: ProjectStatusPoint[] = [
+  { status: "Planning",  count: 0 },
+  { status: "Active",    count: 0 },
+  { status: "On Hold",   count: 0 },
+  { status: "Completed", count: 0 },
+  { status: "Cancelled", count: 0 },
 ];
+
+const STATUS_COLORS: Record<string, string> = {
+  Planning:  "#94a3b8",
+  Active:    "#3b82f6",
+  "On Hold": "#f59e0b",
+  Completed: "#10b981",
+  Cancelled: "#ef4444",
+};
 
 function fmtK(v: number | string): string {
   const n = Number(v);
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000)    return `$${(n / 1000).toFixed(0)}k`;
-  return `$${n}`;
+  if (n >= 10_00_000) return `₹${(n / 10_00_000).toFixed(1)}L`;
+  if (n >= 1000)      return `₹${(n / 1000).toFixed(0)}K`;
+  return `₹${n}`;
 }
 
-export function RevenueChart() {
+// ---------------------------------------------------------------------------
+// RevenueChart — accepts live data prop, falls back to zeros while loading
+// ---------------------------------------------------------------------------
+interface RevenueChartProps {
+  data?: MonthlyRevenuePoint[];
+  loading?: boolean;
+}
+
+export function RevenueChart({ data, loading }: RevenueChartProps) {
+  // Backend returns "Jan 2025" — trim to just month label for axis
+  const chartData = (data ?? FALLBACK_MONTHLY).map((d) => ({
+    ...d,
+    month: d.month.split(" ")[0],
+    revenue: Number(d.revenue),
+    expenses: Number(d.expenses),
+    profit: Number(d.profit),
+  }));
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-gray-900">Revenue Overview</h3>
-          <p className="text-sm text-gray-500">7-month performance</p>
+          <p className="text-sm text-gray-500">
+            {loading ? "Loading..." : `${chartData.length}-month performance`}
+          </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
@@ -59,7 +103,7 @@ export function RevenueChart() {
         </div>
       </div>
       <ResponsiveContainer width="100%" height={240}>
-        <AreaChart data={MONTHLY} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.15} />
@@ -76,7 +120,7 @@ export function RevenueChart() {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-          <YAxis tickFormatter={fmtK} tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={54} />
+          <YAxis tickFormatter={fmtK} tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={60} />
           <Tooltip
             formatter={(v: number | string | readonly (string | number)[]) => [fmtK(Number(v)), ""]}
             contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 13 }}
@@ -90,15 +134,32 @@ export function RevenueChart() {
   );
 }
 
-export function ProjectStatusChart() {
+// ---------------------------------------------------------------------------
+// ProjectStatusChart — accepts live data prop
+// ---------------------------------------------------------------------------
+interface ProjectStatusChartProps {
+  data?: ProjectStatusPoint[];
+  total?: number;
+  loading?: boolean;
+}
+
+export function ProjectStatusChart({ data, total, loading }: ProjectStatusChartProps) {
+  const chartData = (data ?? FALLBACK_STATUS).map((d) => ({
+    name: d.status,
+    count: d.count,
+    color: STATUS_COLORS[d.status] ?? "#94a3b8",
+  }));
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full">
       <div className="mb-4">
         <h3 className="font-semibold text-gray-900">Projects by Status</h3>
-        <p className="text-sm text-gray-500">60 total projects</p>
+        <p className="text-sm text-gray-500">
+          {loading ? "Loading..." : `${total ?? 0} total projects`}
+        </p>
       </div>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={STATUS} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+        <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
           <XAxis type="number" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
           <YAxis
             dataKey="name"
@@ -110,7 +171,7 @@ export function ProjectStatusChart() {
           />
           <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 13 }} />
           <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-            {STATUS.map((entry, i) => (
+            {chartData.map((entry, i) => (
               <Cell key={`c-${i}`} fill={entry.color} />
             ))}
           </Bar>
