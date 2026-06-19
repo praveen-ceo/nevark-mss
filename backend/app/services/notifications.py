@@ -28,7 +28,7 @@ async def push(
         is_read=False,
     )
     db.add(notif)
-    await db.flush()
+    await db.commit()
     await db.refresh(notif)
     return notif
 
