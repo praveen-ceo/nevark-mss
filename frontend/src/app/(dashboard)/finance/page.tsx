@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { AxiosError } from "axios";
 import {
   AlertCircle, BadgeDollarSign, CheckCircle2,
-  CreditCard, FileText, Loader2, Plus, Search,
+  CreditCard, Download, FileText, Loader2, Plus, Search,
   SendHorizonal, Settings, TrendingDown, TrendingUp, Wallet, X,
 } from "lucide-react";
 import {
@@ -62,8 +62,11 @@ interface FinanceDashboard {
 
 interface FinanceSettings {
   id: string; company_name: string | null; company_gstin: string | null;
-  state_code: string | null; cgst_rate: number; sgst_rate: number; igst_rate: number;
+  company_address: string | null; company_email: string | null; company_phone: string | null;
+  pan: string | null; state_code: string | null;
+  cgst_rate: number; sgst_rate: number; igst_rate: number;
   bank_name: string | null; bank_account: string | null; bank_ifsc: string | null;
+  bank_branch: string | null;
   invoice_prefix: string; default_sac: string; payment_terms: number; default_currency: string;
 }
 
@@ -361,6 +364,33 @@ function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClo
 function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
   invoice: Invoice; onClose: () => void; onSend: () => void; onPay: () => void;
 }) {
+  const { data: settings } = useQuery({ queryKey: ["finance-settings"], queryFn: api.settings, staleTime: 300_000 });
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleDownloadPdf() {
+    setPdfLoading(true);
+    try {
+      const { downloadInvoicePdf } = await import("@/lib/invoicePdf");
+      await downloadInvoicePdf(invoice, {
+        company_name:    settings?.company_name    ?? "Nevark Technologies LLP",
+        company_gstin:   settings?.company_gstin   ?? null,
+        company_address: settings?.company_address ?? null,
+        company_email:   settings?.company_email   ?? null,
+        company_phone:   settings?.company_phone   ?? null,
+        pan:             settings?.pan             ?? null,
+        state_code:      settings?.state_code      ?? null,
+        bank_name:       settings?.bank_name       ?? null,
+        bank_account:    settings?.bank_account    ?? null,
+        bank_ifsc:       settings?.bank_ifsc       ?? null,
+        bank_branch:     settings?.bank_branch     ?? null,
+        default_sac:     settings?.default_sac     ?? "998314",
+        payment_terms:   settings?.payment_terms   ?? 30,
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   const cfg = STATUS_CONFIG[invoice.status] ?? STATUS_CONFIG.draft;
   const outstanding = invoice.outstanding_amount ?? (invoice.total_amount - invoice.paid_amount);
   const isIntrastate = invoice.supply_type === "intrastate";
@@ -462,6 +492,14 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
               <CreditCard className="w-4 h-4" />Record Payment
             </button>
           )}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {pdfLoading ? "Generating…" : "Download PDF"}
+          </button>
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition ml-auto">Close</button>
         </div>
       </div>
