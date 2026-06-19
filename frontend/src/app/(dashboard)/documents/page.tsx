@@ -1,193 +1,586 @@
-﻿"use client";
+"use client";
 
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
 import {
   Download,
-  Eye,
   File,
   FileSpreadsheet,
   FileText,
-  Filter,
+  FolderOpen,
   Image,
+  Loader2,
   Search,
+  Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api/client";
 
-interface Doc {
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface Category {
   id: string;
   name: string;
-  category: string;
-  type: string;
-  size: string;
-  date: string;
-  uploadedBy: string;
-  tags: string[];
+  parent_id: string | null;
 }
 
-const DOCS: Doc[] = [
-  { id:"1",  name:"Q4 2024 Financial Report",     category:"Reports",    type:"pdf",  size:"3.2 MB", date:"10 Jan", uploadedBy:"Sneha R.",  tags:["finance","quarterly"]         },
-  { id:"2",  name:"Employee Handbook v3.1",        category:"HR",         type:"docx", size:"1.1 MB", date:"08 Jan", uploadedBy:"Priya N.",  tags:["hr","policy"]                 },
-  { id:"3",  name:"TechCorp MSA Agreement",        category:"Contracts",  type:"pdf",  size:"2.7 MB", date:"06 Jan", uploadedBy:"Kiran M.",  tags:["legal","client"]              },
-  { id:"4",  name:"Project Budget Template",       category:"Finance",    type:"xlsx", size:"0.8 MB", date:"05 Jan", uploadedBy:"Sneha R.",  tags:["template","projects"]         },
-  { id:"5",  name:"Q3 Sales Deck",                 category:"Reports",    type:"pdf",  size:"5.4 MB", date:"03 Jan", uploadedBy:"Kiran M.",  tags:["sales","presentation"]        },
-  { id:"6",  name:"NDA - Innovate Ltd",            category:"Legal",      type:"pdf",  size:"0.5 MB", date:"02 Jan", uploadedBy:"Arjun S.",  tags:["legal","nda"]                 },
-  { id:"7",  name:"Office Floor Plan 2025",        category:"Other",      type:"png",  size:"4.1 MB", date:"30 Dec", uploadedBy:"Admin",     tags:["facility"]                    },
-  { id:"8",  name:"Vendor Comparison Matrix",      category:"Reports",    type:"xlsx", size:"1.3 MB", date:"28 Dec", uploadedBy:"Ravi K.",   tags:["vendor","procurement"]        },
-  { id:"9",  name:"HR Recruitment Policy",         category:"HR",         type:"docx", size:"0.6 MB", date:"22 Dec", uploadedBy:"Priya N.",  tags:["hr","recruitment"]            },
-  { id:"10", name:"Cloud Migration Agreement",     category:"Contracts",  type:"pdf",  size:"1.9 MB", date:"18 Dec", uploadedBy:"Arjun S.",  tags:["legal","it"]                  },
+interface Document {
+  id: string;
+  title: string;
+  description: string | null;
+  file_name: string;
+  file_size: number | null;
+  mime_type: string | null;
+  tags: string | null;
+  related_type: string | null;
+  related_id: string | null;
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  category: Category | null;
+  uploader_name: string | null;
+}
+
+interface DownloadUrlResponse {
+  url: string;
+  expires_in_minutes: number;
+}
+
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
+const api = {
+  categories: () => apiClient.get<Category[]>("/documents/categories").then((r) => r.data),
+  list: (params: Record<string, string | undefined>) =>
+    apiClient.get<Document[]>("/documents", { params }).then((r) => r.data),
+  download: (id: string) =>
+    apiClient.get<DownloadUrlResponse>(`/documents/${id}/download`).then((r) => r.data),
+  upload: (form: FormData) =>
+    apiClient.post<Document>("/documents/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data),
+  delete: (id: string) => apiClient.delete(`/documents/${id}`),
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const MIME_FILTER_OPTIONS = [
+  { value: "", label: "All Types" },
+  { value: "pdf", label: "PDF" },
+  { value: "docx", label: "Word" },
+  { value: "xlsx", label: "Excel" },
+  { value: "image", label: "Image" },
 ];
 
-const CATEGORIES = ["All","Reports","HR","Contracts","Finance","Legal","Other"];
+function getFileIcon(mimeType: string | null) {
+  if (!mimeType) return { Icon: File, color: "text-gray-500", bg: "bg-gray-50" };
+  if (mimeType.includes("pdf")) return { Icon: FileText, color: "text-red-600", bg: "bg-red-50" };
+  if (mimeType.includes("word") || mimeType.includes("document"))
+    return { Icon: File, color: "text-blue-600", bg: "bg-blue-50" };
+  if (mimeType.includes("sheet") || mimeType.includes("excel"))
+    return { Icon: FileSpreadsheet, color: "text-emerald-600", bg: "bg-emerald-50" };
+  if (mimeType.startsWith("image/")) return { Icon: Image, color: "text-purple-600", bg: "bg-purple-50" };
+  return { Icon: File, color: "text-gray-500", bg: "bg-gray-50" };
+}
 
-const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  pdf:  { icon: FileText,        color: "text-red-600",    bg: "bg-red-50"    },
-  docx: { icon: File,            color: "text-blue-600",   bg: "bg-blue-50"   },
-  xlsx: { icon: FileSpreadsheet, color: "text-emerald-600",bg: "bg-emerald-50"},
-  png:  { icon: Image,           color: "text-purple-600", bg: "bg-purple-50" },
-  jpg:  { icon: Image,           color: "text-pink-600",   bg: "bg-pink-50"   },
-};
+function fmtSize(bytes: number | null): string {
+  if (!bytes) return "—";
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
 
-const TYPE_BADGE: Record<string, string> = {
-  pdf:  "bg-red-100 text-red-700",
-  docx: "bg-blue-100 text-blue-700",
-  xlsx: "bg-emerald-100 text-emerald-700",
-  png:  "bg-purple-100 text-purple-700",
-};
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+interface Toast { id: number; message: string; type: "success" | "error" }
+
+function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const counter = useRef(0);
+  const show = (message: string, type: Toast["type"] = "success") => {
+    const id = ++counter.current;
+    setToasts((p) => [...p, { id, message, type }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3500);
+  };
+  return { toasts, show };
+}
+
+// ---------------------------------------------------------------------------
+// Upload Modal
+// ---------------------------------------------------------------------------
+interface UploadModalProps {
+  categories: Category[];
+  onClose: () => void;
+  onSuccess: (doc: Document) => void;
+}
+
+function UploadModal({ categories, onClose, onSuccess }: UploadModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [relatedType, setRelatedType] = useState("");
+  const [tags, setTags] = useState("");
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const mutation = useMutation({
+    mutationFn: (form: FormData) => api.upload(form),
+    onSuccess: (doc) => onSuccess(doc),
+    onError: (e: AxiosError<{ detail: string }>) =>
+      setError(e.response?.data?.detail ?? "Upload failed"),
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) { setError("Please select a file"); return; }
+    if (!title.trim()) { setError("Title is required"); return; }
+    setError("");
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title.trim());
+    if (description) form.append("description", description);
+    if (categoryId) form.append("category_id", categoryId);
+    if (relatedType) form.append("related_type", relatedType);
+    if (tags) form.append("tags", tags);
+    mutation.mutate(form);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        key="upload-modal"
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 12 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 z-10"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-gray-900">Upload Document</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* File picker */}
+          <div
+            onClick={() => fileRef.current?.click()}
+            className={cn(
+              "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition",
+              file ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-400"
+            )}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                setFile(f);
+                if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ""));
+              }}
+            />
+            {file ? (
+              <p className="text-sm font-medium text-blue-700">{file.name} ({fmtSize(file.size)})</p>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Click to select a file</p>
+              </>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Title *</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Document title"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">None</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Attach To</label>
+              <select
+                value={relatedType}
+                onChange={(e) => setRelatedType(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">General</option>
+                <option value="project">Project</option>
+                <option value="client">Client</option>
+                <option value="employee">Employee</option>
+                <option value="invoice">Invoice</option>
+                <option value="task">Task</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. legal, q4, finance"
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-600">{error}</p>}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
+            >
+              {mutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Uploading</>
+              ) : (
+                <><Upload className="w-4 h-4" /> Upload</>
+              )}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Delete Confirm Modal
+// ---------------------------------------------------------------------------
+function DeleteModal({
+  doc,
+  onClose,
+  onConfirm,
+}: {
+  doc: Document;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        key="delete-modal"
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 12 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10"
+      >
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Delete Document?</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          &ldquo;{doc.title}&rdquo; will be soft-deleted and removed from the list.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition"
+          >
+            Delete
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+type ActiveModal = { type: "upload" } | { type: "delete"; doc: Document };
 
 export default function DocumentsPage() {
-  const [search, setSearch]   = useState("");
-  const [category, setCategory] = useState("All");
-  const [view, setView]       = useState<"grid"|"list">("grid");
+  const qc = useQueryClient();
+  const { toasts, show: showToast } = useToast();
 
-  const filtered = useMemo(() => DOCS.filter((d) => {
-    const q = search.toLowerCase();
-    const matchQ = d.name.toLowerCase().includes(q) || d.tags.some((t) => t.includes(q));
-    const matchC = category === "All" || d.category === category;
-    return matchQ && matchC;
-  }), [search, category]);
+  const [modal, setModal] = useState<ActiveModal | null>(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [mimeFilter, setMimeFilter] = useState("");
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  function handleSearch(v: string) {
+    setSearch(v);
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => setDebouncedSearch(v), 400);
+  }
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["doc-categories"],
+    queryFn: api.categories,
+  });
+
+  const { data: documents = [], isLoading } = useQuery({
+    queryKey: ["documents", debouncedSearch, categoryFilter, mimeFilter],
+    queryFn: () =>
+      api.list({
+        search: debouncedSearch || undefined,
+        category_id: categoryFilter || undefined,
+        mime_filter: mimeFilter || undefined,
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      showToast("Document deleted");
+      setModal(null);
+    },
+    onError: () => showToast("Delete failed", "error"),
+  });
+
+  async function handleDownload(doc: Document) {
+    try {
+      const { url } = await api.download(doc.id);
+      window.open(url, "_blank");
+    } catch {
+      showToast("Could not generate download link", "error");
+    }
+  }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-sm text-gray-500">Centralised storage for all your business documents</p>
+          <p className="text-sm text-gray-500">Centralised storage for all business documents</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
-          <Upload className="w-4 h-4" />Upload Document
+        <button
+          onClick={() => setModal({ type: "upload" })}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm"
+        >
+          <Upload className="w-4 h-4" /> Upload Document
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-          <Search className="w-4 h-4 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search documents..."
-            className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none flex-1" />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search documents or tags..."
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {CATEGORIES.map((cat) => (
-            <button key={cat} onClick={() => setCategory(cat)}
-              className={cn("text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap border",
-                category === cat ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")}>
-              {cat}
-            </button>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Categories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </div>
+        </select>
 
-        <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm ml-auto">
-          {(["grid","list"] as const).map((v) => (
-            <button key={v} onClick={() => setView(v)}
-              className={cn("px-3 py-2 text-xs font-medium transition", view === v ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50")}>
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
+        <select
+          value={mimeFilter}
+          onChange={(e) => setMimeFilter(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {MIME_FILTER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
-        </div>
-        <span className="text-xs text-gray-400">{filtered.length} files</span>
+        </select>
       </div>
 
-      {view === "grid" ? (
-        <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {filtered.map((doc, i) => {
-            const tc = TYPE_CONFIG[doc.type] ?? TYPE_CONFIG.pdf;
-            const IconComp = tc.icon;
-            return (
-              <motion.div key={doc.id} initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.05 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow group">
-                <div className="flex items-start justify-between mb-3">
-                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", tc.bg)}>
-                    <IconComp className={cn("w-5 h-5", tc.color)} />
-                  </div>
-                  <span className={cn("text-[11px] font-bold uppercase px-2 py-0.5 rounded-full", TYPE_BADGE[doc.type] ?? "bg-gray-100 text-gray-600")}>
-                    {doc.type}
-                  </span>
-                </div>
-                <p className="font-semibold text-gray-900 text-sm leading-tight mb-1 line-clamp-2">{doc.name}</p>
-                <p className="text-xs text-gray-400 mb-2.5">{doc.size} &bull; {doc.date}</p>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {doc.tags.slice(0, 2).map((tag) => (
-                    <span key={tag} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{tag}</span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">{doc.uploadedBy}</span>
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
-                    <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><Eye className="w-3.5 h-3.5" /></button>
-                    <button className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><Download className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+      {/* Count */}
+      <div className="text-xs text-gray-400">
+        {isLoading ? "Loading..." : `${documents.length} document${documents.length !== 1 ? "s" : ""}`}
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading documents...
+        </div>
+      ) : documents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <FolderOpen className="w-12 h-12 mb-3 opacity-40" />
+          <p className="text-sm font-medium">No documents found</p>
+          <p className="text-xs mt-1">Upload your first document to get started</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {["Name","Category","Type","Size","Uploaded By","Date",""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-5 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Document</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Category</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Size</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Uploaded</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">By</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((doc, i) => {
-                const tc = TYPE_CONFIG[doc.type] ?? TYPE_CONFIG.pdf;
-                const IconComp = tc.icon;
+            <tbody className="divide-y divide-gray-50">
+              {documents.map((doc) => {
+                const { Icon, color, bg } = getFileIcon(doc.mime_type);
+                const tagList = doc.tags
+                  ? doc.tags.split(",").map((t) => t.trim()).filter(Boolean)
+                  : [];
                 return (
-                  <motion.tr key={doc.id} initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:i*0.04 }}
-                    className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", tc.bg)}>
-                          <IconComp className={cn("w-4 h-4", tc.color)} />
+                  <tr key={doc.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", bg)}>
+                          <Icon className={cn("w-4 h-4", color)} />
                         </div>
-                        <span className="font-medium text-gray-900">{doc.name}</span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate max-w-xs">{doc.title}</p>
+                          <p className="text-xs text-gray-400 truncate">{doc.file_name}</p>
+                          {tagList.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {tagList.slice(0, 3).map((tag) => (
+                                <span key={tag} className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5"><span className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full">{doc.category}</span></td>
-                    <td className="px-4 py-3.5"><span className={cn("text-xs font-bold uppercase px-2 py-0.5 rounded-full", TYPE_BADGE[doc.type] ?? "bg-gray-100 text-gray-600")}>{doc.type}</span></td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">{doc.size}</td>
-                    <td className="px-4 py-3.5 text-gray-600 text-xs">{doc.uploadedBy}</td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">{doc.date}</td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Eye className="w-3.5 h-3.5" /></button>
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Download className="w-3.5 h-3.5" /></button>
+                      {doc.category ? (
+                        <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg">
+                          {doc.category.name}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 text-xs">&mdash;</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-500 text-xs">{fmtSize(doc.file_size)}</td>
+                    <td className="px-4 py-3.5 text-gray-500 text-xs">{fmtDate(doc.created_at)}</td>
+                    <td className="px-4 py-3.5 text-gray-500 text-xs">{doc.uploader_name ?? "—"}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => handleDownload(doc)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setModal({ type: "delete", doc })}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 );
               })}
             </tbody>
           </table>
-          {filtered.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">No documents match your search.</div>
-          )}
         </div>
       )}
+
+      {/* Modals */}
+      <AnimatePresence mode="wait">
+        {modal?.type === "upload" && (
+          <UploadModal
+            key="upload"
+            categories={categories}
+            onClose={() => setModal(null)}
+            onSuccess={() => {
+              qc.invalidateQueries({ queryKey: ["documents"] });
+              showToast("Document uploaded successfully");
+              setModal(null);
+            }}
+          />
+        )}
+        {modal?.type === "delete" && (
+          <DeleteModal
+            key="delete"
+            doc={modal.doc}
+            onClose={() => setModal(null)}
+            onConfirm={() => deleteMutation.mutate(modal.doc.id)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Toasts */}
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2">
+        <AnimatePresence>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className={cn(
+                "px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg",
+                t.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+              )}
+            >
+              {t.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
