@@ -39,6 +39,7 @@ interface EmployeeCreate {
   first_name: string; last_name: string; job_title: string;
   department_id: string; employment_type: string;
   hire_date: string; phone: string; salary: string;
+  role: string;
 }
 
 interface EmployeeUpdate {
@@ -77,12 +78,22 @@ const AVATAR_COLORS = [
   "bg-blue-500","bg-purple-500","bg-emerald-500","bg-orange-500",
   "bg-rose-500","bg-teal-500","bg-indigo-500","bg-cyan-500",
 ];
+const ASSIGNABLE_ROLES = [
+  { value: "employee",        label: "Employee"         },
+  { value: "hr_manager",      label: "HR Manager"       },
+  { value: "project_manager", label: "Project Manager"  },
+  { value: "finance_manager", label: "Finance Manager"  },
+  { value: "manager",         label: "Manager"          },
+  { value: "cto",             label: "CTO"              },
+  { value: "cfo",             label: "CFO"              },
+];
+
 const EMPTY_CREATE: EmployeeCreate = {
   email: "", full_name: "", password: "Nevark@2025",
   first_name: "", last_name: "", job_title: "",
   department_id: "", employment_type: "full_time",
   hire_date: new Date().toISOString().split("T")[0],
-  phone: "", salary: "",
+  phone: "", salary: "", role: "employee",
 };
 
 // ---------------------------------------------------------------------------
@@ -195,6 +206,12 @@ function AddModal({ onClose, departments, onSuccess }: {
         <Field label="Hire Date" required><input type="date" value={form.hire_date} onChange={set("hire_date")} className={inputCls} /></Field>
         <Field label="Phone"><input value={form.phone} onChange={set("phone")} placeholder="+91 98765 43210" className={inputCls} /></Field>
         <Field label="Salary (annual)"><input type="number" value={form.salary} onChange={set("salary")} placeholder="850000" className={inputCls} /></Field>
+        <Field label="Role" required>
+          <select value={form.role} onChange={set("role")} className={inputCls}>
+            {ASSIGNABLE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </Field>
+        <div />
       </div>
       {err && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import hash_password
-from app.models.auth import User
+from app.models.auth import Role, User, user_roles
 from app.models.employee import Department, Employee
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 
@@ -82,6 +82,18 @@ async def create_employee(db: AsyncSession, data: EmployeeCreate) -> Employee:
     db.add(user)
     await db.flush()
 
+    # Assign role if provided
+    if data.role:
+        role_obj = await db.scalar(
+            select(Role).where(Role.name == data.role, Role.is_active.is_(True))
+        )
+        if role_obj:
+            await db.execute(
+                user_roles.insert().values(user_id=user.id, role_id=role_obj.id)
+            )
+        else:
+            log.warning("employee.create.role_not_found", role=data.role)
+
     code = await _generate_code(db)
     emp = Employee(
         id=uuid.uuid4(),
@@ -99,7 +111,7 @@ async def create_employee(db: AsyncSession, data: EmployeeCreate) -> Employee:
     )
     db.add(emp)
     await db.commit()
-    log.info("employee.created", code=code, email=data.email)
+    log.info("employee.created", code=code, email=data.email, role=data.role)
     return await get_employee(db, emp.id)
 
 
@@ -122,7 +134,7 @@ async def update_employee(
     return await get_employee(db, employee_id)
 
 
-async def delete_employee(db: AsyncSession, employee_id: uuid.UUID) -> None:
+async def deactivate_employee(db: AsyncSession, employee_id: uuid.UUID) -> None:
     emp = await get_employee(db, employee_id)
     emp.is_active = False
     emp.user.is_active = False

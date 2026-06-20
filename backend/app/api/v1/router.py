@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes.analytics import router as analytics_router
+from app.api.v1.routes.attendance import router as attendance_router
 from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.clients import router as clients_router
 from app.api.v1.routes.documents import router as documents_router
@@ -14,6 +15,7 @@ router = APIRouter()
 
 router.include_router(auth_router,          prefix="/auth",          tags=["auth"])
 router.include_router(employees_router,     prefix="/employees",     tags=["employees"])
+router.include_router(attendance_router,    prefix="/attendance",    tags=["attendance"])
 router.include_router(clients_router,       prefix="/clients",       tags=["clients"])
 router.include_router(projects_router,      prefix="/projects",      tags=["projects"])
 router.include_router(finance_router,       prefix="/finance",       tags=["finance"])

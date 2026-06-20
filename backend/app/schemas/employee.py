@@ -37,6 +37,8 @@ class EmployeeCreate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     salary: Optional[Decimal] = None
+    # Optional role assignment (role name, e.g. "employee", "hr_manager")
+    role: Optional[str] = None
 
 
 class EmployeeUpdate(BaseModel):

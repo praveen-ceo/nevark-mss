@@ -1,4 +1,4 @@
-﻿export interface LoginRequest {
+export interface LoginRequest {
   email: string;
   password: string;
 }
@@ -9,17 +9,12 @@ export interface TokenResponse {
   token_type: string;
 }
 
-export interface UserRole {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
 export interface UserOut {
   id: string;
   email: string;
-  full_name: string;
+  full_name: string | null;
   is_active: boolean;
   is_verified: boolean;
-  roles: UserRole[];
+  /** Role names returned by /auth/me, e.g. ["ceo", "super_admin"] */
+  roles: string[];
 }
