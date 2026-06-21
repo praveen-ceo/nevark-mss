@@ -19,3 +19,4 @@ from app.models.prediction import (  # noqa: F401
 from app.models.system import ActivityLog, AuditLog, Notification  # noqa: F401
 
 __all__ = ["Base"]
+from app.models.product import Product  # noqa: F401

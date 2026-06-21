@@ -110,6 +110,12 @@ PERMISSIONS: list[tuple[str, str, str]] = [
     # system
     ("system.audit_logs",   "View Audit Logs",   "system"),
     ("system.notifications","Manage Notifications","system"),
+    # products
+    ("products.view",         "View Products",        "products"),
+    ("products.create",       "Create Products",      "products"),
+    ("products.edit",         "Edit Products",        "products"),
+    ("products.delete",       "Delete Products",      "products"),
+    ("products.view_revenue", "View Product Revenue", "products"),
 ]
 
 _ALL = [p[0] for p in PERMISSIONS]
@@ -127,6 +133,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "documents.view", "documents.upload",
         "ai.chat", "ai.predictions",
         "system.notifications",
+        "products.view", "products.create", "products.edit", "products.view_revenue",
     ],
     "cfo": [
         "clients.view",
@@ -138,6 +145,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "documents.view", "documents.upload",
         "ai.chat", "ai.predictions",
         "system.notifications",
+        "products.view", "products.view_revenue",
     ],
     "manager": [
         "employees.view", "attendance.view", "leave.view", "leave.approve",
@@ -146,18 +154,21 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "finance.view_invoices", "finance.view_payments", "finance.view_expenses",
         "finance.approve_expenses", "contracts.view", "documents.view",
         "documents.upload", "ai.chat", "ai.predictions",
+        "products.view", "products.create", "products.edit", "products.view_revenue",
     ],
     "hr_manager": [
         "employees.view", "employees.create", "employees.edit",
         "attendance.view", "attendance.manage",
         "leave.view", "leave.approve", "leave.manage",
         "documents.view", "documents.upload",
+        "products.view",
     ],
     "project_manager": [
         "clients.view", "projects.view", "projects.create",
         "projects.edit", "projects.tasks", "employees.view",
         "finance.view_invoices", "finance.view_expenses",
         "documents.view", "documents.upload", "ai.chat", "ai.predictions",
+        "products.view",
     ],
     "finance_manager": [
         "clients.view",
@@ -168,15 +179,18 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "po.view", "po.create", "po.edit", "po.approve",
         "contracts.view", "documents.view", "documents.upload",
         "ai.predictions",
+        "products.view", "products.view_revenue",
     ],
     "employee": [
         "attendance.view", "leave.view",
         "projects.view", "finance.view_expenses",
         "documents.view", "ai.chat",
+        "products.view",
     ],
     "viewer": [
         "employees.view", "clients.view", "projects.view",
         "finance.view_invoices", "documents.view",
+        "products.view",
     ],
 }
 

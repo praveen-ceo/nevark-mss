@@ -163,3 +163,28 @@ class AuditAction(str, enum.Enum):
     READ = "read"
     UPDATE = "update"
     DELETE = "delete"
+
+
+class ProductCategory(str, enum.Enum):
+    TECHNOLOGIES      = "technologies"
+    FASHION_BOUTIQUES = "fashion_boutiques"
+    LOGISTICS         = "logistics"
+    FOODS             = "foods"
+    SYSTEMS           = "systems"
+
+
+class ProductStream(str, enum.Enum):
+    B2B         = "b2b"
+    B2C         = "b2c"
+    SAAS        = "saas"
+    MARKETPLACE = "marketplace"
+    SERVICES    = "services"
+    OTHER       = "other"
+
+
+class ProductStatus(str, enum.Enum):
+    ACTIVE       = "active"
+    INACTIVE     = "inactive"
+    DISCONTINUED = "discontinued"
+    UPCOMING     = "upcoming"
+    BETA         = "beta"

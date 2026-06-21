@@ -12,6 +12,7 @@ import {
   Clock,
   FileText,
   LayoutDashboard,
+  Package,
   Users,
   Wallet,
   Zap,
@@ -25,6 +26,7 @@ import { useAuthStore } from "@/store/authStore";
 
 const ALL_NAV = [
   { label: "Dashboard",    href: "/dashboard",    icon: LayoutDashboard },
+  { label: "Products",     href: "/products",     icon: Package          },
   { label: "Employees",    href: "/employees",    icon: Users            },
   { label: "Attendance",   href: "/attendance",   icon: Clock            },
   { label: "Clients",      href: "/clients",      icon: Briefcase        },
@@ -41,14 +43,14 @@ const ROLE_ROUTES: Record<string, string[] | "all"> = {
   super_admin:     "all",
   admin:           "all",
   ceo:             "all",
-  cto:             ["/dashboard", "/employees", "/attendance", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
-  cfo:             ["/dashboard", "/finance", "/clients", "/documents", "/notifications", "/ai-assistant"],
-  manager:         ["/dashboard", "/employees", "/attendance", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
-  hr_manager:      ["/dashboard", "/employees", "/attendance", "/notifications"],
-  project_manager: ["/dashboard", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
-  finance_manager: ["/dashboard", "/finance", "/clients", "/documents", "/notifications", "/ai-assistant"],
-  employee:        ["/dashboard", "/attendance", "/tasks", "/notifications"],
-  viewer:          ["/dashboard", "/employees", "/clients", "/projects", "/finance"],
+  cto:             ["/dashboard", "/products", "/employees", "/attendance", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
+  cfo:             ["/dashboard", "/products", "/finance", "/clients", "/documents", "/notifications", "/ai-assistant"],
+  manager:         ["/dashboard", "/products", "/employees", "/attendance", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
+  hr_manager:      ["/dashboard", "/products", "/employees", "/attendance", "/notifications"],
+  project_manager: ["/dashboard", "/products", "/clients", "/projects", "/tasks", "/documents", "/notifications", "/ai-assistant"],
+  finance_manager: ["/dashboard", "/products", "/finance", "/clients", "/documents", "/notifications", "/ai-assistant"],
+  employee:        ["/dashboard", "/products", "/attendance", "/tasks", "/notifications"],
+  viewer:          ["/dashboard", "/products", "/employees", "/clients", "/projects", "/finance"],
 };
 
 function allowedRoutes(roles: string[]): Set<string> | "all" {
