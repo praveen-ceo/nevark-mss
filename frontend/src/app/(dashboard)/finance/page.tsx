@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AxiosError } from "axios";
 import {
-  AlertCircle, BadgeDollarSign, CheckCircle2,
+  AlertCircle, BadgeDollarSign, BarChart3, CheckCircle2,
   CreditCard, Download, FileText, Loader2, Plus, Search,
   SendHorizonal, Settings, TrendingDown, TrendingUp, Wallet, X,
 } from "lucide-react";
@@ -15,6 +15,7 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
+import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,6 +71,22 @@ interface FinanceSettings {
   invoice_prefix: string; default_sac: string; payment_terms: number; default_currency: string;
 }
 
+interface ProjectFinanceSummary {
+  project_id: string;
+  project_name: string;
+  project_code: string;
+  client_name: string | null;
+  project_value: number | null;
+  total_invoiced: number;
+  total_received: number;
+  pending_amount: number;
+  gst_amount: number;
+  expenses: number;
+  estimated_profit: number;
+  invoice_count: number;
+  payment_count: number;
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -117,7 +134,8 @@ const TAB_LIST = [
   { key: "partial",  label: "Partial"   },
   { key: "paid",     label: "Paid"      },
   { key: "overdue",  label: "Overdue"   },
-  { key: "cancelled",label: "Cancelled" },
+  { key: "cancelled",       label: "Cancelled"       },
+  { key: "project_finance", label: "Project Finance" },
 ];
 
 const inputCls = "w-full text-sm border border-gray-300 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white text-gray-900 placeholder-gray-400";
@@ -615,6 +633,166 @@ function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 }
 
 // ---------------------------------------------------------------------------
+// Project Finance Section (skeuo-styled, lazy-loaded when tab === "project_finance")
+// ---------------------------------------------------------------------------
+
+function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummary[]; isLoading: boolean }) {
+  const [pfSearch, setPfSearch] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const filtered = pfSearch
+    ? data.filter(p =>
+        p.project_name.toLowerCase().includes(pfSearch.toLowerCase()) ||
+        p.project_code.toLowerCase().includes(pfSearch.toLowerCase()) ||
+        (p.client_name ?? "").toLowerCase().includes(pfSearch.toLowerCase())
+      )
+    : data;
+
+  const totalValue    = data.reduce((s, p) => s + (p.project_value ?? 0), 0);
+  const totalInvoiced = data.reduce((s, p) => s + p.total_invoiced, 0);
+  const totalReceived = data.reduce((s, p) => s + p.total_received, 0);
+  const totalPending  = data.reduce((s, p) => s + p.pending_amount, 0);
+  const totalExpenses = data.reduce((s, p) => s + p.expenses, 0);
+  const totalProfit   = data.reduce((s, p) => s + p.estimated_profit, 0);
+
+  const PF_HEADERS = [
+    "Project", "Code", "Client", "Value (Rs.)", "Invoiced (Rs.)",
+    "Received (Rs.)", "Pending (Rs.)", "GST (Rs.)", "Expenses (Rs.)",
+    "Est. Profit (Rs.)", "Invoices", "Payments",
+  ];
+  const pfRows = () => filtered.map(p => [
+    p.project_name, p.project_code, p.client_name ?? "—",
+    p.project_value ?? 0, p.total_invoiced, p.total_received,
+    p.pending_amount, p.gst_amount, p.expenses, p.estimated_profit,
+    p.invoice_count, p.payment_count,
+  ]);
+
+  const KPI_ITEMS = [
+    { label: "Project Value",  value: totalValue,    color: "text-blue-700",    bg: "bg-gradient-to-br from-blue-50 to-blue-100/60"     },
+    { label: "Total Invoiced", value: totalInvoiced, color: "text-indigo-700",  bg: "bg-gradient-to-br from-indigo-50 to-indigo-100/60"  },
+    { label: "Received",       value: totalReceived, color: "text-emerald-700", bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/60" },
+    { label: "Pending",        value: totalPending,  color: "text-amber-700",   bg: "bg-gradient-to-br from-amber-50 to-amber-100/60"    },
+    { label: "Expenses",       value: totalExpenses, color: "text-red-700",     bg: "bg-gradient-to-br from-red-50 to-red-100/60"        },
+    {
+      label: "Est. Profit", value: totalProfit,
+      color: totalProfit >= 0 ? "text-emerald-700" : "text-red-700",
+      bg: totalProfit >= 0 ? "bg-gradient-to-br from-emerald-50 to-emerald-100/60" : "bg-gradient-to-br from-red-50 to-red-100/60",
+    },
+  ];
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* KPI strip — skeuo-card applied to each */}
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        {KPI_ITEMS.map(kpi => (
+          <div key={kpi.label} className={cn("skeuo-card p-4", kpi.bg)}>
+            <p className="text-xs text-gray-500 font-medium mb-1">{kpi.label}</p>
+            <p className={cn("text-lg font-bold", kpi.color)}>{fmtShort(kpi.value)}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Table — skeuo-surface wrapper */}
+      <div className="skeuo-surface">
+        {/* Toolbar */}
+        <div className="p-4 border-b border-gray-200/60 flex items-center gap-3 bg-white/60">
+          <div className="flex items-center gap-2 flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2">
+            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <input
+              value={pfSearch}
+              onChange={e => setPfSearch(e.target.value)}
+              placeholder="Search project or client..."
+              className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none flex-1"
+            />
+          </div>
+          <span className="text-xs text-gray-400 whitespace-nowrap">{filtered.length} projects</span>
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen(x => !x)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white"
+            >
+              <Download className="w-3.5 h-3.5" />Export
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 min-w-[120px]">
+                {([
+                  ["CSV",   () => { exportCSV("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
+                  ["Excel", () => { exportXLSX("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
+                  ["PDF",   () => { exportPDF("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
+                ] as [string, () => void][]).map(([label, fn]) => (
+                  <button key={label} onClick={fn}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="py-14 flex justify-center">
+            <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200/70">
+                  {["Project", "Client", "Value", "Invoiced", "Received", "Pending", "GST", "Expenses", "Est. Profit", "Inv.", "Pay."].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p, i) => (
+                  <motion.tr
+                    key={p.project_id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.03 }}
+                    className="border-b border-gray-100/80 hover:bg-white/80 transition-colors"
+                  >
+                    <td className="px-4 py-3.5">
+                      <p className="font-semibold text-gray-900 leading-tight">{p.project_name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{p.project_code}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{p.client_name ?? "—"}</td>
+                    <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{p.project_value != null ? fmtShort(p.project_value) : "—"}</td>
+                    <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{fmtShort(p.total_invoiced)}</td>
+                    <td className="px-4 py-3.5 text-emerald-700 font-medium whitespace-nowrap">{fmtShort(p.total_received)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={p.pending_amount > 0 ? "text-amber-600 font-semibold" : "text-gray-400"}>
+                        {fmtShort(p.pending_amount)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-500 whitespace-nowrap">{fmtShort(p.gst_amount)}</td>
+                    <td className="px-4 py-3.5 text-red-600 whitespace-nowrap">{fmtShort(p.expenses)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={p.estimated_profit >= 0 ? "text-emerald-700 font-bold" : "text-red-600 font-bold"}>
+                        {fmtShort(p.estimated_profit)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center text-gray-500">{p.invoice_count}</td>
+                    <td className="px-4 py-3.5 text-center text-gray-500">{p.payment_count}</td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="py-16 text-center text-gray-400 text-sm">
+                {pfSearch ? "No projects match your search." : "No projects found."}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -648,6 +826,14 @@ export default function FinancePage() {
   const { data: invoices = [], isLoading, isError } = useQuery({
     queryKey: ["invoices", tab, dSearch],
     queryFn: () => api.invoices(tab, dSearch),
+    enabled: tab !== "project_finance",
+  });
+
+  const { data: projectSummaries = [], isLoading: pfLoading } = useQuery({
+    queryKey: ["project-finance-summary"],
+    queryFn: () => apiClient.get<ProjectFinanceSummary[]>("/finance/projects/summary").then(r => r.data),
+    enabled: tab === "project_finance",
+    staleTime: 60_000,
   });
 
   const showToast = (msg: string, type: "success" | "error" = "success") => setToast({ msg, type });
@@ -753,10 +939,11 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Invoice table */}
+      {/* Invoice table / Project Finance */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
         {/* Toolbar */}
         <div className="p-4 border-b border-gray-100">
+          {tab !== "project_finance" && (
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
               <Search className="w-4 h-4 text-gray-400" />
@@ -766,24 +953,30 @@ export default function FinancePage() {
             </div>
             <span className="text-xs text-gray-400">{invoices.length} invoices</span>
           </div>
+          )}
           <div className="flex gap-1.5 overflow-x-auto">
             {TAB_LIST.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={cn("text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap",
-                  tab === t.key ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100")}>
+                className={cn(
+                  "text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-1",
+                  tab === t.key ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100",
+                  t.key === "project_finance" && tab !== t.key ? "border border-blue-200 text-blue-700 hover:bg-blue-50" : ""
+                )}>
+                {t.key === "project_finance" && <BarChart3 className="w-3 h-3" />}
                 {t.label}
               </button>
             ))}
           </div>
         </div>
 
-        {isError && (
+        {tab !== "project_finance" && isError && (
           <div className="p-6 flex items-center gap-3 text-red-600">
             <AlertCircle className="w-5 h-5" />
             <p className="text-sm">Failed to load invoices. Check backend is running.</p>
           </div>
         )}
 
+        {tab !== "project_finance" && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -859,9 +1052,14 @@ export default function FinancePage() {
             </div>
           )}
         </div>
+        )}
+
+        {tab === "project_finance" && (
+          <ProjectFinanceSection data={projectSummaries} isLoading={pfLoading} />
+        )}
       </div>
 
-      {/* Modals — keyed by type to avoid AnimatePresence duplicate key issues */}
+      {/* Modals */}
       <AnimatePresence mode="wait">
         {modal?.type === "auto-invoice" && (
           <AutoInvoiceModal key="auto-invoice" onClose={() => setModal(null)} onSuccess={showToast} />

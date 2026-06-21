@@ -15,6 +15,7 @@ from app.schemas.finance import (
     InvoiceResponse,
     InvoiceUpdate,
     PaymentCreate,
+    ProjectFinanceSummary,
 )
 from app.services import finance as svc
 import app.services.notifications as notif_svc
@@ -138,7 +139,7 @@ async def add_payment(invoice_id: uuid.UUID, data: PaymentCreate, db: DBDep, _: 
         try:
             await notif_svc.push(
                 db, "finance",
-                f"Payment received on {inv.invoice_number}: ₹{data.amount}",
+                f"Payment received on {inv.invoice_number}: Rs.{data.amount}",
                 entity_id=inv.id,
             )
         except Exception:
@@ -194,7 +195,6 @@ async def list_expenses(
 @router.post("/expenses", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense(data: ExpenseCreate, db: DBDep, current_user: CurrentUser):
     try:
-        # Resolve employee_id from current user
         from sqlalchemy import select
         from app.models.employee import Employee
         result = await db.execute(
@@ -245,6 +245,36 @@ async def reject_expense(
         return await svc.reject_expense(db, expense_id, reason)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Project Finance Summary
+# NOTE: /projects/summary MUST be registered before /projects/{project_id}/summary
+# to prevent FastAPI treating "summary" as a UUID path param.
+# ---------------------------------------------------------------------------
+
+@router.get("/projects/summary", response_model=List[ProjectFinanceSummary])
+async def list_project_finance_summary(db: DBDep, _: CurrentUser):
+    try:
+        return await svc.get_all_projects_finance_summary(db)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Project finance summary failed: {type(exc).__name__}: {exc}",
+        )
+
+
+@router.get("/projects/{project_id}/summary", response_model=ProjectFinanceSummary)
+async def get_project_finance_summary(project_id: uuid.UUID, db: DBDep, _: CurrentUser):
+    try:
+        return await svc.get_project_finance_summary(db, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Project finance summary failed: {type(exc).__name__}: {exc}",
+        )
 
 
 # ---------------------------------------------------------------------------

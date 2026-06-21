@@ -269,3 +269,23 @@ class FinanceDashboard(BaseModel):
     sent_count: int = 0
     paid_count: int = 0
     overdue_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Project Finance Summary
+# ---------------------------------------------------------------------------
+
+class ProjectFinanceSummary(BaseModel):
+    project_id: UUID
+    project_name: str
+    project_code: str
+    client_name: Optional[str] = None
+    project_value: Optional[Decimal] = None      # Project.budget
+    total_invoiced: Decimal = Decimal("0")        # SUM(Invoice.total_amount)
+    total_received: Decimal = Decimal("0")        # SUM(Invoice.paid_amount)
+    pending_amount: Decimal = Decimal("0")        # total_invoiced - total_received
+    gst_amount: Decimal = Decimal("0")            # SUM(Invoice.tax_amount)
+    expenses: Decimal = Decimal("0")              # SUM(Expense.amount) approved+reimbursed
+    estimated_profit: Decimal = Decimal("0")      # total_received - expenses
+    invoice_count: int = 0
+    payment_count: int = 0

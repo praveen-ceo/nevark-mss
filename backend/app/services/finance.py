@@ -556,3 +556,164 @@ async def get_dashboard(db: AsyncSession):
         paid_count=status_map.get("paid", 0),
         overdue_count=status_map.get("overdue", 0),
     )
+
+
+# ---------------------------------------------------------------------------
+# Project Finance Summary
+# ---------------------------------------------------------------------------
+
+async def get_all_projects_finance_summary(db: AsyncSession):
+    from app.schemas.finance import ProjectFinanceSummary
+
+    # 1. All active projects with client eager-loaded
+    proj_result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.client))
+        .where(Project.is_active == True)
+        .order_by(Project.name)
+    )
+    projects = list(proj_result.scalars().all())
+    if not projects:
+        return []
+
+    project_ids = [p.id for p in projects]
+
+    # 2. Invoice aggregates grouped by project_id (single query)
+    inv_agg_result = await db.execute(
+        select(
+            Invoice.project_id,
+            func.coalesce(func.sum(Invoice.total_amount), 0).label("total_invoiced"),
+            func.coalesce(func.sum(Invoice.paid_amount), 0).label("total_received"),
+            func.coalesce(func.sum(Invoice.tax_amount), 0).label("gst_amount"),
+            func.count(Invoice.id).label("invoice_count"),
+        )
+        .where(Invoice.project_id.in_(project_ids))
+        .where(Invoice.is_active == True)
+        .group_by(Invoice.project_id)
+    )
+    inv_map = {row.project_id: row for row in inv_agg_result.all()}
+
+    # 3. Expense aggregates grouped by project_id (single query)
+    exp_agg_result = await db.execute(
+        select(
+            Expense.project_id,
+            func.coalesce(func.sum(Expense.amount), 0).label("expenses"),
+        )
+        .where(Expense.project_id.in_(project_ids))
+        .where(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]))
+        .where(Expense.is_active == True)
+        .group_by(Expense.project_id)
+    )
+    exp_map = {row.project_id: Decimal(str(row.expenses)) for row in exp_agg_result.all()}
+
+    # 4. Payment counts via invoice join (single query)
+    pay_agg_result = await db.execute(
+        select(
+            Invoice.project_id,
+            func.count(Payment.id).label("payment_count"),
+        )
+        .join(Payment, Payment.invoice_id == Invoice.id)
+        .where(Invoice.project_id.in_(project_ids))
+        .where(Invoice.is_active == True)
+        .group_by(Invoice.project_id)
+    )
+    pay_map = {row.project_id: row.payment_count for row in pay_agg_result.all()}
+
+    # 5. Merge all four result sets in Python — zero N+1
+    summaries = []
+    for p in projects:
+        inv = inv_map.get(p.id)
+        total_invoiced = Decimal(str(inv.total_invoiced if inv else 0)).quantize(Decimal("0.01"))
+        total_received = Decimal(str(inv.total_received if inv else 0)).quantize(Decimal("0.01"))
+        gst_amount     = Decimal(str(inv.gst_amount     if inv else 0)).quantize(Decimal("0.01"))
+        invoice_count  = inv.invoice_count if inv else 0
+        expenses       = exp_map.get(p.id, Decimal("0")).quantize(Decimal("0.01"))
+        payment_count  = pay_map.get(p.id, 0)
+        pending        = (total_invoiced - total_received).quantize(Decimal("0.01"))
+        profit         = (total_received - expenses).quantize(Decimal("0.01"))
+        summaries.append(ProjectFinanceSummary(
+            project_id=p.id,
+            project_name=p.name,
+            project_code=p.code,
+            client_name=p.client.name if p.client else None,
+            project_value=Decimal(str(p.budget)).quantize(Decimal("0.01")) if p.budget else None,
+            total_invoiced=total_invoiced,
+            total_received=total_received,
+            pending_amount=pending,
+            gst_amount=gst_amount,
+            expenses=expenses,
+            estimated_profit=profit,
+            invoice_count=invoice_count,
+            payment_count=payment_count,
+        ))
+    return summaries
+
+
+async def get_project_finance_summary(db: AsyncSession, project_id: uuid.UUID):
+    from app.schemas.finance import ProjectFinanceSummary
+
+    proj_result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.client))
+        .where(Project.id == project_id)
+    )
+    p = proj_result.scalar_one_or_none()
+    if p is None:
+        raise ValueError("Project not found")
+
+    total_invoiced = Decimal(str(await db.scalar(
+        select(func.coalesce(func.sum(Invoice.total_amount), 0))
+        .where(Invoice.project_id == project_id)
+        .where(Invoice.is_active == True)
+    ) or 0)).quantize(Decimal("0.01"))
+
+    total_received = Decimal(str(await db.scalar(
+        select(func.coalesce(func.sum(Invoice.paid_amount), 0))
+        .where(Invoice.project_id == project_id)
+        .where(Invoice.is_active == True)
+    ) or 0)).quantize(Decimal("0.01"))
+
+    gst_amount = Decimal(str(await db.scalar(
+        select(func.coalesce(func.sum(Invoice.tax_amount), 0))
+        .where(Invoice.project_id == project_id)
+        .where(Invoice.is_active == True)
+    ) or 0)).quantize(Decimal("0.01"))
+
+    invoice_count = await db.scalar(
+        select(func.count(Invoice.id))
+        .where(Invoice.project_id == project_id)
+        .where(Invoice.is_active == True)
+    ) or 0
+
+    expenses = Decimal(str(await db.scalar(
+        select(func.coalesce(func.sum(Expense.amount), 0))
+        .where(Expense.project_id == project_id)
+        .where(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]))
+        .where(Expense.is_active == True)
+    ) or 0)).quantize(Decimal("0.01"))
+
+    payment_count = await db.scalar(
+        select(func.count(Payment.id))
+        .join(Invoice, Invoice.id == Payment.invoice_id)
+        .where(Invoice.project_id == project_id)
+        .where(Invoice.is_active == True)
+    ) or 0
+
+    pending = (total_invoiced - total_received).quantize(Decimal("0.01"))
+    profit  = (total_received - expenses).quantize(Decimal("0.01"))
+
+    return ProjectFinanceSummary(
+        project_id=p.id,
+        project_name=p.name,
+        project_code=p.code,
+        client_name=p.client.name if p.client else None,
+        project_value=Decimal(str(p.budget)).quantize(Decimal("0.01")) if p.budget else None,
+        total_invoiced=total_invoiced,
+        total_received=total_received,
+        pending_amount=pending,
+        gst_amount=gst_amount,
+        expenses=expenses,
+        estimated_profit=profit,
+        invoice_count=invoice_count,
+        payment_count=payment_count,
+    )
