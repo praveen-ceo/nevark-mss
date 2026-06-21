@@ -88,7 +88,7 @@ async def mark_read(db: AsyncSession, notif_id: uuid.UUID, user_id: uuid.UUID) -
     notif = result.scalar_one_or_none()
     if notif:
         notif.is_read = True
-        await db.flush()
+        await db.commit()
         await db.refresh(notif)
     return notif
 
@@ -104,4 +104,6 @@ async def mark_all_read(db: AsyncSession, user_id: uuid.UUID) -> int:
         .values(is_read=True)
         .returning(Notification.id)
     )
-    return len(result.fetchall())
+    rows = result.fetchall()
+    await db.commit()
+    return len(rows)

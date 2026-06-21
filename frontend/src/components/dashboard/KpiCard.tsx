@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { motion } from "framer-motion";
 import { TrendingDown, TrendingUp } from "lucide-react";
@@ -17,14 +17,15 @@ interface KpiCardProps {
   index?: number;
 }
 
-const COLOR_MAP: Record<Color, { icon: string; badge: string }> = {
-  blue:    { icon: "bg-blue-50 text-blue-600",    badge: "text-blue-600" },
-  emerald: { icon: "bg-emerald-50 text-emerald-600", badge: "text-emerald-600" },
-  purple:  { icon: "bg-purple-50 text-purple-600",  badge: "text-purple-600" },
-  orange:  { icon: "bg-orange-50 text-orange-600",  badge: "text-orange-600" },
-  red:     { icon: "bg-red-50 text-red-600",       badge: "text-red-600" },
-  teal:    { icon: "bg-teal-50 text-teal-600",     badge: "text-teal-600" },
-  pink:    { icon: "bg-pink-50 text-pink-600",     badge: "text-pink-600" },
+// Dark tinted icon backgrounds + vivid icon colours
+const COLOR_MAP: Record<Color, { iconBg: string; iconColor: string }> = {
+  blue:    { iconBg: "rgba(59,130,246,0.15)",  iconColor: "#60a5fa" },
+  emerald: { iconBg: "rgba(16,185,129,0.15)",  iconColor: "#34d399" },
+  purple:  { iconBg: "rgba(139,92,246,0.15)",  iconColor: "#a78bfa" },
+  orange:  { iconBg: "rgba(251,146,60,0.15)",  iconColor: "#fb923c" },
+  red:     { iconBg: "rgba(239,68,68,0.15)",   iconColor: "#f87171" },
+  teal:    { iconBg: "rgba(20,184,166,0.15)",  iconColor: "#2dd4bf" },
+  pink:    { iconBg: "rgba(236,72,153,0.15)",  iconColor: "#f472b6" },
 };
 
 export function KpiCard({
@@ -44,17 +45,33 @@ export function KpiCard({
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.06 }}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4 hover:shadow-md transition-shadow"
+      className="premium-card p-5 flex items-start gap-4 cursor-default"
     >
-      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0", c.icon)}>
-        <Icon className="w-5 h-5" />
+      {/* Icon */}
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: c.iconBg }}
+      >
+        <Icon className="w-5 h-5" style={{ color: c.iconColor }} />
       </div>
+
+      {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+        <p
+          className="uppercase tracking-wide mb-0.5"
+          style={{ fontSize: "0.7rem", fontWeight: 600, color: "#9CA3AF" }}
+        >
+          {label}
+        </p>
+        <p className="premium-kpi-value">{value}</p>
+        {subtitle && (
+          <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.25rem" }}>{subtitle}</p>
+        )}
         {trend !== undefined && (
-          <div className={cn("flex items-center gap-1 mt-1.5 text-xs font-semibold", up ? "text-emerald-600" : "text-red-500")}>
+          <div
+            className={cn("flex items-center gap-1 mt-1.5 text-xs font-semibold")}
+            style={{ color: up ? "#34d399" : "#f87171" }}
+          >
             {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {Math.abs(trend)}% vs last month
           </div>

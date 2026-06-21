@@ -119,12 +119,12 @@ const api = {
 // ---------------------------------------------------------------------------
 
 const STATUS_CONFIG: Record<string, { label: string; style: string; dot: string }> = {
-  draft:     { label: "Draft",     style: "bg-gray-100 text-gray-600",       dot: "bg-gray-400"    },
-  sent:      { label: "Sent",      style: "bg-blue-100 text-blue-700",       dot: "bg-blue-500"    },
-  partial:   { label: "Partial",   style: "bg-amber-100 text-amber-700",     dot: "bg-amber-500"   },
-  paid:      { label: "Paid",      style: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
-  overdue:   { label: "Overdue",   style: "bg-red-100 text-red-700",         dot: "bg-red-500"     },
-  cancelled: { label: "Cancelled", style: "bg-slate-100 text-slate-500",     dot: "bg-slate-400"   },
+  draft:     { label: "Draft",     style: "bg-gray-800/60 text-gray-300",     dot: "bg-gray-500"     },
+  sent:      { label: "Sent",      style: "bg-blue-900/40 text-blue-300",     dot: "bg-blue-400"     },
+  partial:   { label: "Partial",   style: "bg-amber-900/40 text-amber-300",   dot: "bg-amber-400"    },
+  paid:      { label: "Paid",      style: "bg-emerald-900/40 text-emerald-300", dot: "bg-emerald-400" },
+  overdue:   { label: "Overdue",   style: "bg-red-900/40 text-red-300",       dot: "bg-red-400"      },
+  cancelled: { label: "Cancelled", style: "bg-slate-800/60 text-slate-400",   dot: "bg-slate-500"    },
 };
 
 const TAB_LIST = [
@@ -138,7 +138,7 @@ const TAB_LIST = [
   { key: "project_finance", label: "Project Finance" },
 ];
 
-const inputCls = "w-full text-sm border border-gray-300 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white text-gray-900 placeholder-gray-400";
+const inputCls = "premium-input w-full text-sm px-3 py-2.5 outline-none transition";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -181,14 +181,24 @@ function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error";
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.18 }}
-        className={cn("relative bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-y-auto",
-          wide ? "max-w-2xl" : "max-w-lg")}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition">
+        className={cn("relative rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-y-auto",
+          wide ? "max-w-2xl" : "max-w-lg")}
+        style={{ background: "#1a2234", border: "1px solid rgba(192,192,192,0.12)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
+        <div
+          className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
+          style={{ background: "#1a2234", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <h2 style={{ fontWeight: 600, color: "#E5E7EB" }}>{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg transition"
+            style={{ color: "#6B7280" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -201,8 +211,8 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      <label className="block text-xs font-semibold mb-1.5" style={{ color: "#9CA3AF" }}>
+        {label}{required && <span className="ml-0.5" style={{ color: "#f87171" }}>*</span>}
       </label>
       {children}
     </div>
@@ -251,15 +261,15 @@ function AutoInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucce
         </select>
       </Field>
       {completed.length === 0 && (
-        <p className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+        <p className="mt-3 text-xs rounded-lg px-3 py-2" style={{ background: "rgba(251,146,60,0.1)", color: "#fb923c" }}>
           No eligible projects found. A project must be Completed with a client and budget assigned.
         </p>
       )}
-      {err && <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="mt-3 text-sm rounded-lg px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}>{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
+        <button onClick={onClose} className="px-4 py-2 text-sm rounded-xl transition" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }} onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>Cancel</button>
         <button onClick={() => mut.mutate()} disabled={mut.isPending || !selectedId}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
+          className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet disabled:opacity-50">
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           Generate Invoice
         </button>
@@ -287,20 +297,20 @@ function SendModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose:
   return (
     <Modal title="Send Invoice" onClose={onClose}>
       <div className="flex flex-col items-center text-center gap-4 py-2">
-        <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center">
-          <SendHorizonal className="w-6 h-6 text-blue-600" />
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "rgba(59,130,246,0.12)" }}>
+          <SendHorizonal className="w-6 h-6" style={{ color: "#60a5fa" }} />
         </div>
         <div>
-          <p className="font-semibold text-gray-900">Mark {invoice.invoice_number} as Sent?</p>
-          <p className="text-sm text-gray-500 mt-1">Status will change from Draft → Sent. This cannot be undone.</p>
+          <p className="font-semibold" style={{ color: "#E5E7EB" }}>Mark {invoice.invoice_number} as Sent?</p>
+          <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Status will change from Draft → Sent. This cannot be undone.</p>
         </div>
-        <div className="w-full bg-gray-50 rounded-xl px-4 py-3 text-left text-sm space-y-1">
-          <div className="flex justify-between"><span className="text-gray-500">Client</span><span className="font-medium">{invoice.client?.name ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-semibold text-gray-900">{fmt(invoice.total_amount, invoice.currency)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Due</span><span className="font-medium">{invoice.due_date}</span></div>
+        <div className="w-full rounded-xl px-4 py-3 text-left text-sm space-y-1" style={{ background: "rgba(255,255,255,0.04)" }}>
+          <div className="flex justify-between"><span style={{ color: "#9CA3AF" }}>Client</span><span className="font-medium" style={{ color: "#E5E7EB" }}>{invoice.client?.name ?? "—"}</span></div>
+          <div className="flex justify-between"><span style={{ color: "#9CA3AF" }}>Amount</span><span className="font-semibold" style={{ color: "#E5E7EB" }}>{fmt(invoice.total_amount, invoice.currency)}</span></div>
+          <div className="flex justify-between"><span style={{ color: "#9CA3AF" }}>Due</span><span className="font-medium" style={{ color: "#E5E7EB" }}>{invoice.due_date}</span></div>
         </div>
       </div>
-      {err && <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="mt-3 text-sm rounded-lg px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}>{err}</p>}
       <div className="flex justify-end gap-3 mt-6">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
         <button onClick={() => mut.mutate()} disabled={mut.isPending}
@@ -340,9 +350,9 @@ function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClo
 
   return (
     <Modal title={`Record Payment — ${invoice.invoice_number}`} onClose={onClose}>
-      <div className="bg-blue-50 rounded-xl px-4 py-3 mb-5 flex justify-between text-sm">
-        <span className="text-gray-600">Outstanding</span>
-        <span className="font-bold text-blue-700">{fmt(outstanding, invoice.currency)}</span>
+      <div className="rounded-xl px-4 py-3 mb-5 flex justify-between text-sm" style={{ background: "rgba(59,130,246,0.1)" }}>
+        <span style={{ color: "#9CA3AF" }}>Outstanding</span>
+        <span className="font-bold" style={{ color: "#60a5fa" }}>{fmt(outstanding, invoice.currency)}</span>
       </div>
       <div className="space-y-4">
         <Field label="Amount" required>
@@ -362,11 +372,11 @@ function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClo
           <input value={form.reference} onChange={set("reference")} placeholder="UTR / Transaction ID" className={inputCls} />
         </Field>
       </div>
-      {err && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
-      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
+      {err && <p className="mt-4 text-sm rounded-lg px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}>{err}</p>}
+      <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <button onClick={onClose} className="px-4 py-2 text-sm rounded-xl transition" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }} onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>Cancel</button>
         <button onClick={() => mut.mutate()} disabled={mut.isPending || !form.amount || parseFloat(form.amount) <= 0}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition">
+          className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet disabled:opacity-50">
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           Record Payment
         </button>
@@ -419,9 +429,9 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
         {/* Header row */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-lg font-bold text-gray-900">{invoice.client?.name ?? "—"}</p>
-            {invoice.project && <p className="text-sm text-gray-500 mt-0.5">{invoice.project.name} ({invoice.project.code})</p>}
-            {invoice.gstin && <p className="text-xs text-gray-400 mt-0.5">GSTIN: {invoice.gstin}</p>}
+            <p className="text-lg font-bold" style={{ color: "#E5E7EB" }}>{invoice.client?.name ?? "—"}</p>
+            {invoice.project && <p className="text-sm mt-0.5" style={{ color: "#9CA3AF" }}>{invoice.project.name} ({invoice.project.code})</p>}
+            {invoice.gstin && <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>GSTIN: {invoice.gstin}</p>}
           </div>
           <span className={cn("text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5", cfg.style)}>
             <span className={cn("w-1.5 h-1.5 rounded-full", cfg.dot)} />{cfg.label}
@@ -431,30 +441,30 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
         {/* Dates */}
         <div className="grid grid-cols-3 gap-3">
           {[["Issued", invoice.issue_date], ["Due", invoice.due_date], ["Place of Supply", invoice.place_of_supply ?? "—"]].map(([l, v]) => (
-            <div key={l} className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-400 mb-0.5">{l}</p>
-              <p className="text-sm font-semibold text-gray-800">{v}</p>
+            <div key={l} className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <p className="text-xs mb-0.5" style={{ color: "#6B7280" }}>{l}</p>
+              <p className="text-sm font-semibold" style={{ color: "#E5E7EB" }}>{v}</p>
             </div>
           ))}
         </div>
 
         {/* Items */}
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Line Items</p>
-          <div className="border border-gray-100 rounded-xl overflow-hidden">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#6B7280" }}>Line Items</p>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead style={{ background: "rgba(255,255,255,0.04)" }}>
                 <tr>{["Description", "Qty", "Unit Price", "Amount"].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500">{h}</th>
+                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold" style={{ color: "#9CA3AF" }}>{h}</th>
                 ))}</tr>
               </thead>
               <tbody>
                 {invoice.items.map(item => (
-                  <tr key={item.id} className="border-t border-gray-100">
-                    <td className="px-3 py-2.5 text-gray-700">{item.description}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{item.quantity}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{fmt(item.unit_price, invoice.currency)}</td>
-                    <td className="px-3 py-2.5 font-semibold text-gray-900">{fmt(item.amount, invoice.currency)}</td>
+                  <tr key={item.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                    <td className="px-3 py-2.5" style={{ color: "#E5E7EB" }}>{item.description}</td>
+                    <td className="px-3 py-2.5" style={{ color: "#9CA3AF" }}>{item.quantity}</td>
+                    <td className="px-3 py-2.5" style={{ color: "#9CA3AF" }}>{fmt(item.unit_price, invoice.currency)}</td>
+                    <td className="px-3 py-2.5 font-semibold" style={{ color: "#E5E7EB" }}>{fmt(item.amount, invoice.currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -463,33 +473,33 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
         </div>
 
         {/* Totals */}
-        <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">{fmt(invoice.subtotal, invoice.currency)}</span></div>
-          {invoice.discount_amount > 0 && <div className="flex justify-between text-red-600"><span>Discount</span><span>-{fmt(invoice.discount_amount, invoice.currency)}</span></div>}
+        <div className="rounded-xl p-4 space-y-2 text-sm" style={{ background: "rgba(255,255,255,0.04)" }}>
+          <div className="flex justify-between"><span style={{ color: "#9CA3AF" }}>Subtotal</span><span className="font-medium" style={{ color: "#E5E7EB" }}>{fmt(invoice.subtotal, invoice.currency)}</span></div>
+          {invoice.discount_amount > 0 && <div className="flex justify-between" style={{ color: "#f87171" }}><span>Discount</span><span>-{fmt(invoice.discount_amount, invoice.currency)}</span></div>}
           {isIntrastate ? (
             <>
-              <div className="flex justify-between text-gray-500"><span>CGST ({invoice.cgst_rate}%)</span><span>{fmt(invoice.cgst_amount, invoice.currency)}</span></div>
-              <div className="flex justify-between text-gray-500"><span>SGST ({invoice.sgst_rate}%)</span><span>{fmt(invoice.sgst_amount, invoice.currency)}</span></div>
+              <div className="flex justify-between" style={{ color: "#9CA3AF" }}><span>CGST ({invoice.cgst_rate}%)</span><span>{fmt(invoice.cgst_amount, invoice.currency)}</span></div>
+              <div className="flex justify-between" style={{ color: "#9CA3AF" }}><span>SGST ({invoice.sgst_rate}%)</span><span>{fmt(invoice.sgst_amount, invoice.currency)}</span></div>
             </>
           ) : (
-            <div className="flex justify-between text-gray-500"><span>IGST ({invoice.igst_rate}%)</span><span>{fmt(invoice.igst_amount, invoice.currency)}</span></div>
+            <div className="flex justify-between" style={{ color: "#9CA3AF" }}><span>IGST ({invoice.igst_rate}%)</span><span>{fmt(invoice.igst_amount, invoice.currency)}</span></div>
           )}
-          <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2">
+          <div className="flex justify-between font-bold pt-2" style={{ color: "#E5E7EB", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
             <span>Total</span><span>{fmt(invoice.total_amount, invoice.currency)}</span>
           </div>
-          <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{fmt(invoice.paid_amount, invoice.currency)}</span></div>
-          <div className="flex justify-between font-semibold text-blue-700"><span>Outstanding</span><span>{fmt(outstanding, invoice.currency)}</span></div>
+          <div className="flex justify-between" style={{ color: "#34d399" }}><span>Paid</span><span>{fmt(invoice.paid_amount, invoice.currency)}</span></div>
+          <div className="flex justify-between font-semibold" style={{ color: "#60a5fa" }}><span>Outstanding</span><span>{fmt(outstanding, invoice.currency)}</span></div>
         </div>
 
         {/* Payments history */}
         {invoice.payments.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Payments Received</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#6B7280" }}>Payments Received</p>
             <div className="space-y-1.5">
               {invoice.payments.map(p => (
-                <div key={p.id} className="flex justify-between items-center bg-emerald-50 rounded-lg px-3 py-2 text-sm">
-                  <span className="text-gray-600">{p.payment_date} · {p.payment_method.replace(/_/g, " ")}</span>
-                  <span className="font-semibold text-emerald-700">{fmt(p.amount, invoice.currency)}</span>
+                <div key={p.id} className="flex justify-between items-center rounded-lg px-3 py-2 text-sm" style={{ background: "rgba(16,185,129,0.1)" }}>
+                  <span style={{ color: "#9CA3AF" }}>{p.payment_date} · {p.payment_method.replace(/_/g, " ")}</span>
+                  <span className="font-semibold" style={{ color: "#34d399" }}>{fmt(p.amount, invoice.currency)}</span>
                 </div>
               ))}
             </div>
@@ -497,28 +507,29 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
         )}
 
         {/* Actions */}
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
+        <div className="flex gap-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           {invoice.status === "draft" && (
             <button onClick={onSend}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition">
+              className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
               <SendHorizonal className="w-4 h-4" />Send Invoice
             </button>
           )}
           {["sent", "partial", "overdue"].includes(invoice.status) && (
             <button onClick={onPay}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition"
+              style={{ background: "rgba(16,185,129,0.15)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }}>
               <CreditCard className="w-4 h-4" />Record Payment
             </button>
           )}
           <button
             onClick={handleDownloadPdf}
             disabled={pdfLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
           >
             {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {pdfLoading ? "Generating…" : "Download PDF"}
           </button>
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition ml-auto">Close</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-xl transition ml-auto" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}>Close</button>
         </div>
       </div>
     </Modal>
@@ -608,7 +619,7 @@ function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
       <div className="space-y-6">
         {sections.map(sec => (
           <div key={sec.title}>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{sec.title}</p>
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: "#6B7280" }}>{sec.title}</p>
             <div className="grid grid-cols-2 gap-4">
               {sec.fields.map(f => (
                 <Field key={f.key} label={f.label}>
@@ -619,11 +630,11 @@ function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           </div>
         ))}
       </div>
-      {err && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
-      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
+      {err && <p className="mt-4 text-sm rounded-lg px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}>{err}</p>}
+      <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <button onClick={onClose} className="px-4 py-2 text-sm rounded-xl transition" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }} onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>Cancel</button>
         <button onClick={() => mut.mutate()} disabled={mut.isPending}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
+          className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet disabled:opacity-50">
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           Save Settings
         </button>
@@ -668,15 +679,15 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
   ]);
 
   const KPI_ITEMS = [
-    { label: "Project Value",  value: totalValue,    color: "text-blue-700",    bg: "bg-gradient-to-br from-blue-50 to-blue-100/60"     },
-    { label: "Total Invoiced", value: totalInvoiced, color: "text-indigo-700",  bg: "bg-gradient-to-br from-indigo-50 to-indigo-100/60"  },
-    { label: "Received",       value: totalReceived, color: "text-emerald-700", bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/60" },
-    { label: "Pending",        value: totalPending,  color: "text-amber-700",   bg: "bg-gradient-to-br from-amber-50 to-amber-100/60"    },
-    { label: "Expenses",       value: totalExpenses, color: "text-red-700",     bg: "bg-gradient-to-br from-red-50 to-red-100/60"        },
+    { label: "Project Value",  value: totalValue,    styleColor: "#60a5fa",  styleBg: "rgba(59,130,246,0.1)"  },
+    { label: "Total Invoiced", value: totalInvoiced, styleColor: "#a78bfa",  styleBg: "rgba(139,92,246,0.1)" },
+    { label: "Received",       value: totalReceived, styleColor: "#34d399",  styleBg: "rgba(16,185,129,0.1)" },
+    { label: "Pending",        value: totalPending,  styleColor: "#fb923c",  styleBg: "rgba(251,146,60,0.1)" },
+    { label: "Expenses",       value: totalExpenses, styleColor: "#f87171",  styleBg: "rgba(239,68,68,0.1)"  },
     {
       label: "Est. Profit", value: totalProfit,
-      color: totalProfit >= 0 ? "text-emerald-700" : "text-red-700",
-      bg: totalProfit >= 0 ? "bg-gradient-to-br from-emerald-50 to-emerald-100/60" : "bg-gradient-to-br from-red-50 to-red-100/60",
+      styleColor: totalProfit >= 0 ? "#34d399" : "#f87171",
+      styleBg: totalProfit >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
     },
   ];
 
@@ -685,9 +696,9 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
       {/* KPI strip — skeuo-card applied to each */}
       <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
         {KPI_ITEMS.map(kpi => (
-          <div key={kpi.label} className={cn("skeuo-card p-4", kpi.bg)}>
-            <p className="text-xs text-gray-500 font-medium mb-1">{kpi.label}</p>
-            <p className={cn("text-lg font-bold", kpi.color)}>{fmtShort(kpi.value)}</p>
+          <div key={kpi.label} className="skeuo-card p-4" style={{ background: kpi.styleBg }}>
+            <p className="text-xs font-medium mb-1" style={{ color: "#9CA3AF" }}>{kpi.label}</p>
+            <p className="text-lg font-bold" style={{ color: kpi.styleColor }}>{fmtShort(kpi.value)}</p>
           </div>
         ))}
       </div>
@@ -695,34 +706,36 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
       {/* Table — skeuo-surface wrapper */}
       <div className="skeuo-surface">
         {/* Toolbar */}
-        <div className="p-4 border-b border-gray-200/60 flex items-center gap-3 bg-white/60">
-          <div className="flex items-center gap-2 flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2">
-            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        <div className="p-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+          <div className="flex items-center gap-2 flex-1 rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(192,192,192,0.12)" }}>
+            <Search className="w-4 h-4 flex-shrink-0" style={{ color: "#6B7280" }} />
             <input
               value={pfSearch}
               onChange={e => setPfSearch(e.target.value)}
               placeholder="Search project or client..."
-              className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none flex-1"
+              className="bg-transparent text-sm outline-none flex-1"
+              style={{ color: "#E5E7EB" }}
             />
           </div>
-          <span className="text-xs text-gray-400 whitespace-nowrap">{filtered.length} projects</span>
+          <span className="text-xs whitespace-nowrap" style={{ color: "#6B7280" }}>{filtered.length} projects</span>
           {/* Export dropdown */}
           <div className="relative">
             <button
               onClick={() => setExportOpen(x => !x)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl transition"
+              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}
             >
               <Download className="w-3.5 h-3.5" />Export
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 min-w-[120px]">
+              <div className="absolute right-0 top-10 rounded-xl shadow-lg z-20 py-1 min-w-[120px]" style={{ background: "#1a2234", border: "1px solid rgba(192,192,192,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
                 {([
                   ["CSV",   () => { exportCSV("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
                   ["Excel", () => { exportXLSX("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
                   ["PDF",   () => { exportPDF("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
                 ] as [string, () => void][]).map(([label, fn]) => (
                   <button key={label} onClick={fn}
-                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition">
+                    className="w-full text-left px-3 py-2 text-xs transition" style={{ color: "#C0C0C0" }} onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     {label}
                   </button>
                 ))}
@@ -733,15 +746,15 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
 
         {isLoading ? (
           <div className="py-14 flex justify-center">
-            <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#8B5CF6" }} />
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200/70">
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                   {["Project", "Client", "Value", "Invoiced", "Received", "Pending", "GST", "Expenses", "Est. Profit", "Inv.", "Pay."].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color: "#C0C0C0" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -752,36 +765,36 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    className="border-b border-gray-100/80 hover:bg-white/80 transition-colors"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors hover:bg-[rgba(124,58,237,0.07)]"
                   >
                     <td className="px-4 py-3.5">
-                      <p className="font-semibold text-gray-900 leading-tight">{p.project_name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{p.project_code}</p>
+                      <p className="font-semibold leading-tight" style={{ color: "#E5E7EB" }}>{p.project_name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{p.project_code}</p>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{p.client_name ?? "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{p.project_value != null ? fmtShort(p.project_value) : "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{fmtShort(p.total_invoiced)}</td>
-                    <td className="px-4 py-3.5 text-emerald-700 font-medium whitespace-nowrap">{fmtShort(p.total_received)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#9CA3AF" }}>{p.client_name ?? "—"}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#C0C0C0" }}>{p.project_value != null ? fmtShort(p.project_value) : "—"}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#C0C0C0" }}>{fmtShort(p.total_invoiced)}</td>
+                    <td className="px-4 py-3.5 font-medium whitespace-nowrap" style={{ color: "#34d399" }}>{fmtShort(p.total_received)}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={p.pending_amount > 0 ? "text-amber-600 font-semibold" : "text-gray-400"}>
+                      <span style={{ color: p.pending_amount > 0 ? "#fb923c" : "#6B7280", fontWeight: p.pending_amount > 0 ? 600 : 400 }}>
                         {fmtShort(p.pending_amount)}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500 whitespace-nowrap">{fmtShort(p.gst_amount)}</td>
-                    <td className="px-4 py-3.5 text-red-600 whitespace-nowrap">{fmtShort(p.expenses)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#9CA3AF" }}>{fmtShort(p.gst_amount)}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#f87171" }}>{fmtShort(p.expenses)}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={p.estimated_profit >= 0 ? "text-emerald-700 font-bold" : "text-red-600 font-bold"}>
+                      <span style={{ color: p.estimated_profit >= 0 ? "#34d399" : "#f87171", fontWeight: 700 }}>
                         {fmtShort(p.estimated_profit)}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-center text-gray-500">{p.invoice_count}</td>
-                    <td className="px-4 py-3.5 text-center text-gray-500">{p.payment_count}</td>
+                    <td className="px-4 py-3.5 text-center" style={{ color: "#9CA3AF" }}>{p.invoice_count}</td>
+                    <td className="px-4 py-3.5 text-center" style={{ color: "#9CA3AF" }}>{p.payment_count}</td>
                   </motion.tr>
                 ))}
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <div className="py-16 text-center text-gray-400 text-sm">
+              <div className="py-16 text-center text-sm" style={{ color: "#6B7280" }}>
                 {pfSearch ? "No projects match your search." : "No projects found."}
               </div>
             )}
@@ -847,16 +860,19 @@ export default function FinancePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Finance</h1>
-          <p className="text-sm text-gray-500">Invoices, GST, payments and financial performance</p>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#E5E7EB" }}>Finance</h1>
+          <p className="text-sm" style={{ color: "#9CA3AF" }}>Invoices, GST, payments and financial performance</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setModal({ type: "settings" })}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl transition"
+            style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
+            onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")}
+            onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
             <Settings className="w-4 h-4" />Settings
           </button>
           <button onClick={() => setModal({ type: "auto-invoice" })}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-sm">
+            className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
             <Plus className="w-4 h-4" />New Invoice
           </button>
         </div>
@@ -876,8 +892,8 @@ export default function FinancePage() {
       {/* Summary cards + chart */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Invoice summary grid */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Invoice Summary</h3>
+        <div className="premium-card p-5">
+          <h3 className="font-semibold mb-4" style={{ color: "#E5E7EB" }}>Invoice Summary</h3>
           <div className="grid grid-cols-2 gap-3">
             {(["draft","sent","paid","overdue"] as const).map(s => {
               const cfg = STATUS_CONFIG[s];
@@ -897,20 +913,20 @@ export default function FinancePage() {
         </div>
 
         {/* Recharts bar — static placeholder since API has no monthly data endpoint */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="xl:col-span-2 premium-card p-5">
           <div className="mb-4">
-            <h3 className="font-semibold text-gray-900">Revenue vs Expenses</h3>
-            <p className="text-xs text-gray-400">Live aggregates (monthly breakdown in V2)</p>
+            <h3 className="font-semibold" style={{ color: "#E5E7EB" }}>Revenue vs Expenses</h3>
+            <p className="text-xs" style={{ color: "#6B7280" }}>Live aggregates (monthly breakdown in V2)</p>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-2">
             {[
-              { label: "Collected", value: dashboard?.revenue_collected, color: "text-emerald-600" },
-              { label: "Expenses",  value: dashboard?.total_expenses,    color: "text-red-600"     },
-              { label: "Net",       value: dashboard?.net_profit,        color: "text-blue-600"    },
+              { label: "Collected", value: dashboard?.revenue_collected, color: "#34d399" },
+              { label: "Expenses",  value: dashboard?.total_expenses,    color: "#f87171" },
+              { label: "Net",       value: dashboard?.net_profit,        color: "#60a5fa" },
             ].map(item => (
-              <div key={item.label} className="bg-gray-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-gray-400 mb-1">{item.label}</p>
-                <p className={cn("text-lg font-bold", item.color)}>{fmtShort(item.value)}</p>
+              <div key={item.label} className="rounded-xl p-4 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <p className="text-xs mb-1" style={{ color: "#6B7280" }}>{item.label}</p>
+                <p className="text-lg font-bold" style={{ color: item.color }}>{fmtShort(item.value)}</p>
               </div>
             ))}
           </div>
@@ -927,9 +943,9 @@ export default function FinancePage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(192,192,192,0.15)", fontSize: 12, background: "#1a2234", color: "#E5E7EB" }} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}
-                    fill="#3b82f6"
+                    fill="#7C3AED"
                     label={false}
                   />
                 </BarChart>
@@ -940,28 +956,32 @@ export default function FinancePage() {
       </div>
 
       {/* Invoice table / Project Finance */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <div className="premium-surface">
         {/* Toolbar */}
-        <div className="p-4 border-b border-gray-100">
+        <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           {tab !== "project_finance" && (
           <div className="flex flex-wrap items-center gap-3 mb-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-              <Search className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-2 flex-1 min-w-[200px] rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(192,192,192,0.12)" }}>
+              <Search className="w-4 h-4" style={{ color: "#6B7280" }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by invoice number..."
-                className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none flex-1" />
-              {isLoading && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin flex-shrink-0" />}
+                className="bg-transparent text-sm outline-none flex-1" style={{ color: "#E5E7EB" }} />
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" style={{ color: "#8B5CF6" }} />}
             </div>
-            <span className="text-xs text-gray-400">{invoices.length} invoices</span>
+            <span className="text-xs" style={{ color: "#6B7280" }}>{invoices.length} invoices</span>
           </div>
           )}
           <div className="flex gap-1.5 overflow-x-auto">
             {TAB_LIST.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={cn(
-                  "text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-1",
-                  tab === t.key ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100",
-                  t.key === "project_finance" && tab !== t.key ? "border border-blue-200 text-blue-700 hover:bg-blue-50" : ""
-                )}>
+                className="text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-1"
+                style={tab === t.key
+                  ? { background: "#7C3AED", color: "#fff" }
+                  : t.key === "project_finance"
+                    ? { color: "#8B5CF6", border: "1px solid rgba(124,58,237,0.3)" }
+                    : { color: "#9CA3AF" }}
+                onMouseEnter={e => { if (tab !== t.key) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={e => { if (tab !== t.key) e.currentTarget.style.background = "transparent"; }}
+              >
                 {t.key === "project_finance" && <BarChart3 className="w-3 h-3" />}
                 {t.label}
               </button>
@@ -970,7 +990,7 @@ export default function FinancePage() {
         </div>
 
         {tab !== "project_finance" && isError && (
-          <div className="p-6 flex items-center gap-3 text-red-600">
+          <div className="p-6 flex items-center gap-3" style={{ color: "#f87171" }}>
             <AlertCircle className="w-5 h-5" />
             <p className="text-sm">Failed to load invoices. Check backend is running.</p>
           </div>
@@ -980,9 +1000,9 @@ export default function FinancePage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                 {["Invoice", "Client", "Project", "Items", "Subtotal", "GST", "Total", "Outstanding", "Status", "Due", ""].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color: "#C0C0C0" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -992,28 +1012,28 @@ export default function FinancePage() {
                 const outstanding = inv.outstanding_amount ?? (inv.total_amount - inv.paid_amount);
                 return (
                   <motion.tr key={inv.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                    className="border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors cursor-pointer hover:bg-[rgba(124,58,237,0.07)]"
                     onClick={() => setModal({ type: "detail", invoice: inv })}>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <FileText className="w-4 h-4 text-blue-600" />
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(124,58,237,0.15)" }}>
+                          <FileText className="w-4 h-4" style={{ color: "#8B5CF6" }} />
                         </div>
-                        <span className="font-mono text-sm font-semibold text-gray-800">{inv.invoice_number}</span>
+                        <span className="font-mono text-sm font-semibold" style={{ color: "#E5E7EB" }}>{inv.invoice_number}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-700 font-medium whitespace-nowrap">{inv.client?.name ?? "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs whitespace-nowrap">{inv.project?.code ?? "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-500">{inv.items.length}</td>
-                    <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{fmt(inv.subtotal, inv.currency)}</td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs whitespace-nowrap">
+                    <td className="px-4 py-3.5 font-medium whitespace-nowrap" style={{ color: "#C0C0C0" }}>{inv.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>{inv.project?.code ?? "—"}</td>
+                    <td className="px-4 py-3.5" style={{ color: "#9CA3AF" }}>{inv.items.length}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#C0C0C0" }}>{fmt(inv.subtotal, inv.currency)}</td>
+                    <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>
                       {inv.supply_type === "intrastate"
                         ? `C+S ${inv.cgst_rate}%+${inv.sgst_rate}%`
                         : inv.igst_rate ? `IGST ${inv.igst_rate}%` : "—"}
                     </td>
-                    <td className="px-4 py-3.5 font-bold text-gray-900 whitespace-nowrap">{fmt(inv.total_amount, inv.currency)}</td>
+                    <td className="px-4 py-3.5 font-bold whitespace-nowrap" style={{ color: "#E5E7EB" }}>{fmt(inv.total_amount, inv.currency)}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={cn("font-semibold", outstanding > 0 ? "text-amber-600" : "text-gray-400")}>
+                      <span style={{ fontWeight: 600, color: outstanding > 0 ? "#fb923c" : "#6B7280" }}>
                         {fmt(outstanding, inv.currency)}
                       </span>
                     </td>
@@ -1023,19 +1043,19 @@ export default function FinancePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-xs whitespace-nowrap">
-                      <span className={cn(inv.status === "overdue" ? "text-red-600 font-semibold" : "text-gray-500")}>{inv.due_date}</span>
+                      <span style={{ color: inv.status === "overdue" ? "#f87171" : "#9CA3AF", fontWeight: inv.status === "overdue" ? 600 : 400 }}>{inv.due_date}</span>
                     </td>
                     <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         {inv.status === "draft" && (
                           <button onClick={() => setModal({ type: "send", invoice: inv })}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap flex items-center gap-1">
+                            className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#8B5CF6" }}>
                             <SendHorizonal className="w-3 h-3" />Send
                           </button>
                         )}
                         {["sent", "partial", "overdue"].includes(inv.status) && (
                           <button onClick={() => setModal({ type: "pay", invoice: inv })}
-                            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap flex items-center gap-1">
+                            className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#34d399" }}>
                             <CreditCard className="w-3 h-3" />Pay
                           </button>
                         )}
@@ -1047,7 +1067,7 @@ export default function FinancePage() {
             </tbody>
           </table>
           {!isLoading && invoices.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">
+            <div className="py-16 text-center text-sm" style={{ color: "#6B7280" }}>
               {dSearch || tab !== "all" ? "No invoices match your filters." : "No invoices yet. Generate one from a completed project."}
             </div>
           )}

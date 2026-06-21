@@ -621,34 +621,35 @@ export default function EmployeesPage() {
 
       {/* Modals + Toast */}
       <AnimatePresence>
-  {showAdd && (
-    <AddModal
-      key="add-employee-modal"
-      onClose={() => setShowAdd(false)}
-      departments={departments}
-      onSuccess={(msg) => showToast(msg)}
-    />
-  )}
-
-  {editEmp && (
-    <EditModal
-      key={`edit-employee-${editEmp.id}`}
-      emp={editEmp}
-      onClose={() => setEditEmp(null)}
-      departments={departments}
-      onSuccess={(msg) => showToast(msg)}
-    />
-  )}
-
-  {delEmp && (
-    <DeleteModal
-      key={`delete-employee-${delEmp.id}`}
-      emp={delEmp}
-      onClose={() => setDelEmp(null)}
-      onSuccess={(msg) => showToast(msg)}
-    />
-  )}
-</AnimatePresence>
+        {showAdd && (
+          <AddModal
+            key="add-employee-modal"
+            onClose={() => setShowAdd(false)}
+            departments={departments}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {editEmp && (
+          <EditModal
+            key={`edit-employee-${editEmp.id}`}
+            emp={editEmp}
+            onClose={() => setEditEmp(null)}
+            departments={departments}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {delEmp && (
+          <DeleteModal
+            key={`delete-employee-${delEmp.id}`}
+            emp={delEmp}
+            onClose={() => setDelEmp(null)}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {toast && (
+          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

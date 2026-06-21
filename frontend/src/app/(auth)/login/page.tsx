@@ -6,17 +6,16 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Lock, Mail, Zap } from "lucide-react";
 import { login, me } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
-import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
   const { setTokens, setUser } = useAuthStore();
 
-  const [email, setEmail] = useState("superadmin@nevark.com");
+  const [email, setEmail]     = useState("superadmin@nevark.com");
   const [password, setPassword] = useState("admin123");
-  const [showPw, setShowPw] = useState(false);
+  const [showPw, setShowPw]   = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,48 +38,99 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ background: "linear-gradient(145deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%)" }}>
+    <div
+      className="min-h-screen flex"
+      style={{ background: "#0B0F19" }}
+    >
+      {/* ── Left panel — branding ── */}
+      <div
+        className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden"
+        style={{
+          background: "linear-gradient(145deg, #0B0F19 0%, #111827 60%, #0d1220 100%)",
+          borderRight: "1px solid rgba(212,175,55,0.12)",
+        }}
+      >
+        {/* Grid pattern */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg,transparent,transparent 48px,rgba(255,255,255,0.025) 48px,rgba(255,255,255,0.025) 49px)," +
+              "repeating-linear-gradient(90deg,transparent,transparent 48px,rgba(255,255,255,0.025) 48px,rgba(255,255,255,0.025) 49px)",
+          }}
+        />
 
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 opacity-[0.04]"
-          style={{ backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 40px,#fff 40px,#fff 41px),repeating-linear-gradient(90deg,transparent,transparent 40px,#fff 40px,#fff 41px)" }} />
+        {/* Violet glow orb */}
+        <div
+          className="absolute top-[38%] left-[40%] -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] rounded-full pointer-events-none"
+          style={{
+            background: "radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)",
+            filter: "blur(40px)",
+          }}
+        />
 
-        {/* Glow orb */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full opacity-20 blur-3xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, #3b82f6, transparent)" }} />
+        {/* Gold accent line */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px]"
+          style={{ background: "linear-gradient(90deg, transparent, #D4AF37 40%, #F4D03F 60%, transparent)" }}
+        />
 
         {/* Logo */}
         <div className="flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", boxShadow: "0 4px 14px rgba(59,130,246,0.5)" }}>
-            <Zap className="w-5 h-5 text-white" />
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{
+              background: "linear-gradient(135deg, #D4AF37 0%, #b8962e 100%)",
+              boxShadow: "0 4px 16px rgba(212,175,55,0.4)",
+            }}
+          >
+            <Zap className="w-5 h-5" style={{ color: "#0B0F19" }} />
           </div>
           <div>
-            <span className="text-white font-bold text-xl tracking-tight">Nevark</span>
-            <span className="text-blue-400 font-bold text-xl"> MSS</span>
+            <p style={{ color: "#D4AF37", fontWeight: 800, fontSize: "1.1rem", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+              NEVARK
+            </p>
+            <p style={{ color: "#9CA3AF", fontSize: "0.625rem", letterSpacing: "0.16em", textTransform: "uppercase", lineHeight: 1.2 }}>
+              Enterprise Suite
+            </p>
           </div>
         </div>
 
-        {/* Hero text */}
+        {/* Hero copy */}
         <div className="relative z-10">
           <motion.div
-            initial={{ opacity: 0, y: 24 }}
+            initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: "easeOut" }}
+            transition={{ duration: 0.75, ease: "easeOut" }}
           >
-            <h1 className="text-5xl font-bold text-white leading-tight mb-5">
-              Enterprise management,
+            <p
+              style={{
+                fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase",
+                color: "#D4AF37", marginBottom: "1rem", fontWeight: 600,
+              }}
+            >
+              Management &amp; Smart System
+            </p>
+            <h1
+              style={{
+                fontSize: "2.75rem", fontWeight: 800, lineHeight: 1.15,
+                color: "#E5E7EB", marginBottom: "1.25rem", letterSpacing: "-0.03em",
+              }}
+            >
+              NEVARK GROUPS
               <br />
-              <span className="text-transparent bg-clip-text"
-                style={{ backgroundImage: "linear-gradient(135deg, #60a5fa, #a78bfa)" }}>
-                unified.
+              <span
+                style={{
+                  backgroundImage: "linear-gradient(135deg, #D4AF37 0%, #F4D03F 50%, #c9a227 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                Enterprise Platform
               </span>
             </h1>
-            <p className="text-slate-400 text-lg leading-relaxed">
-              HR · Projects · Finance · Documents · AI — all in one platform.
+            <p style={{ color: "#6B7280", fontSize: "1rem", lineHeight: 1.7, maxWidth: "420px" }}>
+              HR · Products · Finance · Projects · Documents · AI — unified in one premium system.
             </p>
           </motion.div>
 
@@ -88,117 +138,244 @@ export default function LoginPage() {
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
+            transition={{ duration: 0.7, delay: 0.25 }}
             className="flex flex-wrap gap-2 mt-8"
           >
-            {["Employees", "Projects", "Finance", "Documents", "AI Assistant"].map((f) => (
-              <span key={f} className="px-3 py-1 text-xs font-medium rounded-full text-blue-300"
-                style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)" }}>
+            {["Employees", "Products", "Finance", "Projects", "AI Assistant"].map((f) => (
+              <span
+                key={f}
+                className="px-3 py-1 text-xs font-medium rounded-full"
+                style={{
+                  background: "rgba(212,175,55,0.07)",
+                  border: "1px solid rgba(212,175,55,0.2)",
+                  color: "#D4AF37",
+                }}
+              >
                 {f}
               </span>
             ))}
           </motion.div>
         </div>
 
-        <p className="text-slate-600 text-sm relative z-10">© 2025 Nevark. All rights reserved.</p>
+        <p style={{ color: "#374151", fontSize: "0.75rem", position: "relative", zIndex: 10 }}>
+          © 2025 Nevark Groups. All rights reserved.
+        </p>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center bg-white p-8">
+      {/* ── Right panel — form ── */}
+      <div
+        className="flex-1 flex items-center justify-center p-8"
+        style={{ background: "#0B0F19" }}
+      >
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
+          initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
           className="w-full max-w-md"
         >
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #3b82f6, #1d4ed8)" }}>
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg text-gray-900">Nevark MSS</span>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
-            <p className="text-gray-500">Sign in to your Nevark account</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                Email address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="you@company.com"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  style={{ background: "#f8fafc" }}
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  style={{ background: "#f8fafc" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-                >
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl"
+          {/* Card */}
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "linear-gradient(145deg, #141c2e 0%, #111827 100%)",
+              border: "1px solid rgba(212,175,55,0.15)",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+          >
+            {/* Mobile logo */}
+            <div className="flex items-center gap-2.5 mb-7 lg:hidden">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, #D4AF37, #b8962e)" }}
               >
-                {error}
-              </motion.div>
-            )}
+                <Zap className="w-4 h-4" style={{ color: "#0B0F19" }} />
+              </div>
+              <span style={{ fontWeight: 800, fontSize: "1rem", color: "#D4AF37" }}>NEVARK</span>
+            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={cn(
-                "w-full py-3 rounded-xl font-semibold text-sm text-white transition-all duration-200",
-                "focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-                "disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2",
-                "hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+            {/* Heading */}
+            <div className="mb-7">
+              <div
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-4"
+                style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.25)" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#8B5CF6" }} />
+                <span style={{ fontSize: "0.65rem", color: "#8B5CF6", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  Secure Sign-In
+                </span>
+              </div>
+              <h2 style={{ fontSize: "1.6rem", fontWeight: 700, color: "#E5E7EB", marginBottom: "0.35rem", letterSpacing: "-0.02em" }}>
+                Welcome back
+              </h2>
+              <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>
+                Sign in to your Nevark MSS account
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#9CA3AF", marginBottom: "0.5rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                    style={{ color: "#4B5563" }}
+                  />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@nevark.com"
+                    style={{
+                      width: "100%",
+                      paddingLeft: "2.5rem",
+                      paddingRight: "1rem",
+                      paddingTop: "0.75rem",
+                      paddingBottom: "0.75rem",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(192,192,192,0.12)",
+                      borderRadius: "0.75rem",
+                      fontSize: "0.875rem",
+                      color: "#FFFFFF",
+                      outline: "none",
+                      boxShadow: "inset 0 1px 3px rgba(0,0,0,0.25)",
+                      transition: "border-color 0.2s, box-shadow 0.2s",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(139,92,246,0.5)";
+                      e.currentTarget.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(124,58,237,0.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(192,192,192,0.12)";
+                      e.currentTarget.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.25)";
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#9CA3AF", marginBottom: "0.5rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                    style={{ color: "#4B5563" }}
+                  />
+                  <input
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    style={{
+                      width: "100%",
+                      paddingLeft: "2.5rem",
+                      paddingRight: "2.75rem",
+                      paddingTop: "0.75rem",
+                      paddingBottom: "0.75rem",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(192,192,192,0.12)",
+                      borderRadius: "0.75rem",
+                      fontSize: "0.875rem",
+                      color: "#FFFFFF",
+                      outline: "none",
+                      boxShadow: "inset 0 1px 3px rgba(0,0,0,0.25)",
+                      transition: "border-color 0.2s, box-shadow 0.2s",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(139,92,246,0.5)";
+                      e.currentTarget.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(124,58,237,0.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(192,192,192,0.12)";
+                      e.currentTarget.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.25)";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "#4B5563" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#9CA3AF")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#4B5563")}
+                  >
+                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  style={{
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#f87171",
+                    fontSize: "0.875rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "0.75rem",
+                  }}
+                >
+                  {error}
+                </motion.div>
               )}
-              style={{ background: loading ? "#3b82f6" : "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", boxShadow: "0 4px 14px rgba(59,130,246,0.35)" }}
-            >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
 
-          <p className="text-center text-xs text-gray-400 mt-8">
-            Secured by Nevark Enterprise Auth · v1.0
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2"
+                style={{
+                  marginTop: "0.5rem",
+                  padding: "0.8rem 1rem",
+                  borderRadius: "0.75rem",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  color: "#fff",
+                  background: loading
+                    ? "rgba(124,58,237,0.6)"
+                    : "linear-gradient(135deg, #7C3AED 0%, #5b21b6 100%)",
+                  boxShadow: loading ? "none" : "0 4px 18px rgba(124,58,237,0.4)",
+                  border: "1px solid rgba(139,92,246,0.3)",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.75 : 1,
+                  transition: "all 0.2s",
+                  letterSpacing: "0.02em",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.boxShadow = "0 6px 24px rgba(124,58,237,0.55)";
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "0 4px 18px rgba(124,58,237,0.4)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {loading ? "Signing in…" : "Sign in to Nevark MSS"}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: "1.5rem", paddingTop: "1.25rem" }}>
+              <p style={{ textAlign: "center", fontSize: "0.7rem", color: "#374151", letterSpacing: "0.04em" }}>
+                NEVARK GROUPS Management &amp; Smart System · v1.0
+              </p>
+            </div>
+          </div>
+
+          <p style={{ textAlign: "center", fontSize: "0.7rem", color: "#1F2937", marginTop: "1.25rem" }}>
+            Secured by Nevark Enterprise Auth
           </p>
         </motion.div>
       </div>

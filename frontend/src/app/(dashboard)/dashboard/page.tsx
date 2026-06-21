@@ -80,30 +80,30 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function urgencyClass(days: number): string {
-  if (days <= 3)  return "bg-red-100 text-red-700";
-  if (days <= 7)  return "bg-amber-100 text-amber-700";
-  return "bg-blue-100 text-blue-700";
+function urgencyStyle(days: number): { background: string; color: string } {
+  if (days <= 3)  return { background: "rgba(239,68,68,0.12)",   color: "#f87171" };
+  if (days <= 7)  return { background: "rgba(251,146,60,0.12)",  color: "#fb923c" };
+  return                  { background: "rgba(124,58,237,0.12)", color: "#a78bfa" };
 }
 
 function entityIcon(type: string) {
   switch (type) {
-    case "task":     return { Icon: CheckCircle2, color: "text-emerald-500 bg-emerald-50" };
-    case "project":  return { Icon: Briefcase,    color: "text-blue-500 bg-blue-50"       };
-    case "finance":  return { Icon: Wallet,       color: "text-purple-500 bg-purple-50"   };
-    case "document": return { Icon: FileText,     color: "text-orange-500 bg-orange-50"   };
-    case "employee": return { Icon: Users,        color: "text-teal-500 bg-teal-50"       };
-    default:         return { Icon: Wallet,       color: "text-gray-500 bg-gray-100"      };
+    case "task":     return { Icon: CheckCircle2, bg: "rgba(16,185,129,0.15)",  color: "#34d399" };
+    case "project":  return { Icon: Briefcase,    bg: "rgba(59,130,246,0.15)",  color: "#60a5fa" };
+    case "finance":  return { Icon: Wallet,       bg: "rgba(139,92,246,0.15)", color: "#a78bfa" };
+    case "document": return { Icon: FileText,     bg: "rgba(251,146,60,0.15)", color: "#fb923c" };
+    case "employee": return { Icon: Users,        bg: "rgba(20,184,166,0.15)", color: "#2dd4bf" };
+    default:         return { Icon: Wallet,       bg: "rgba(255,255,255,0.06)", color: "#6B7280" };
   }
 }
 
 const QUICK_ACTIONS = [
-  { label: "New Invoice",   href: "/finance",      Icon: FileText,   color: "bg-blue-50 text-blue-700 hover:bg-blue-100"       },
-  { label: "Add Employee",  href: "/employees",    Icon: Users,      color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" },
-  { label: "New Project",   href: "/projects",     Icon: Briefcase,  color: "bg-purple-50 text-purple-700 hover:bg-purple-100"  },
-  { label: "Upload Doc",    href: "/documents",    Icon: Plus,       color: "bg-orange-50 text-orange-700 hover:bg-orange-100"  },
-  { label: "View Tasks",    href: "/tasks",        Icon: TrendingUp, color: "bg-pink-50 text-pink-700 hover:bg-pink-100"        },
-  { label: "Finance",       href: "/finance",      Icon: CreditCard, color: "bg-teal-50 text-teal-700 hover:bg-teal-100"        },
+  { label: "New Invoice",  href: "/finance",   Icon: FileText,   bg: "rgba(59,130,246,0.1)",  color: "#93c5fd" },
+  { label: "Add Employee", href: "/employees", Icon: Users,      bg: "rgba(16,185,129,0.1)",  color: "#6ee7b7" },
+  { label: "New Project",  href: "/projects",  Icon: Briefcase,  bg: "rgba(139,92,246,0.1)", color: "#c4b5fd" },
+  { label: "Upload Doc",   href: "/documents", Icon: Plus,       bg: "rgba(251,146,60,0.1)", color: "#fdba74" },
+  { label: "View Tasks",   href: "/tasks",     Icon: TrendingUp, bg: "rgba(236,72,153,0.1)", color: "#f9a8d4" },
+  { label: "Finance",      href: "/finance",   Icon: CreditCard, bg: "rgba(20,184,166,0.1)", color: "#5eead4" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -128,7 +128,6 @@ export default function DashboardPage() {
     refetchInterval: 60_000,
   });
 
-  // KPI card data — show skeleton values while loading
   const f = data?.finance;
   const KPIS = [
     {
@@ -188,21 +187,28 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#E5E7EB" }}>
             {greeting}, {user?.full_name?.split(" ")[0] ?? "there"}
           </h1>
-          <p className="text-gray-500 mt-0.5 text-sm">
+          <p style={{ color: "#9CA3AF", marginTop: "0.125rem", fontSize: "0.875rem" }}>
             {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {isLoading ? (
-            <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-100 text-gray-500 rounded-full">
+            <span
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
+              style={{ background: "rgba(255,255,255,0.05)", color: "#6B7280" }}
+            >
               <Loader2 className="w-3 h-3 animate-spin" /> Loading
             </span>
           ) : (
-            <span className="text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full font-semibold flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />All systems operational
+            <span
+              className="text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-1.5"
+              style={{ background: "rgba(16,185,129,0.12)", color: "#34d399" }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#34d399" }} />
+              All systems operational
             </span>
           )}
         </div>
@@ -226,15 +232,17 @@ export default function DashboardPage() {
             loading={isLoading}
           />
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        {/* Quick Actions */}
+        <div className="premium-card p-5">
+          <h3 style={{ fontWeight: 600, color: "#E5E7EB", marginBottom: "1rem" }}>Quick Actions</h3>
           <div className="grid grid-cols-2 gap-2.5">
-            {QUICK_ACTIONS.map(({ label, href, Icon, color }) => (
+            {QUICK_ACTIONS.map(({ label, href, Icon, bg, color }) => (
               <Link key={label} href={href}>
                 <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`flex flex-col items-center gap-2 p-3.5 rounded-xl cursor-pointer transition font-medium text-xs ${color}`}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex flex-col items-center gap-2 p-3.5 rounded-xl cursor-pointer transition font-medium text-xs"
+                  style={{ background: bg, color }}
                 >
                   <Icon className="w-5 h-5" />
                   {label}
@@ -247,35 +255,54 @@ export default function DashboardPage() {
 
       {/* Activity + Deadlines */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        {/* Recent Activity */}
+        <div className="xl:col-span-2 premium-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Recent Activity</h3>
-            <Link href="/notifications" className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
+            <h3 style={{ fontWeight: 600, color: "#E5E7EB" }}>Recent Activity</h3>
+            <Link
+              href="/notifications"
+              className="flex items-center gap-1 font-medium text-xs"
+              style={{ color: "#8B5CF6" }}
+            >
               View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           {feedLoading ? (
-            <div className="flex items-center justify-center py-8 text-gray-300">
+            <div className="flex items-center justify-center py-8" style={{ color: "#6B7280" }}>
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : !feedData?.items?.length ? (
-            <p className="text-sm text-gray-400 text-center py-6">No recent activity yet</p>
+            <p className="text-sm text-center py-6" style={{ color: "#6B7280" }}>No recent activity yet</p>
           ) : (
             <div className="space-y-3">
               {feedData.items.map((n) => {
-                const { Icon, color } = entityIcon(n.entity_type);
+                const { Icon, bg, color } = entityIcon(n.entity_type);
                 return (
-                  <div key={n.id} className={`flex items-start gap-3 ${!n.is_read ? "opacity-100" : "opacity-80"}`}>
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-                      <Icon className="w-3.5 h-3.5" />
+                  <div
+                    key={n.id}
+                    className="flex items-start gap-3"
+                    style={{ opacity: n.is_read ? 0.75 : 1 }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: bg }}
+                    >
+                      <Icon className="w-3.5 h-3.5" style={{ color }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${n.is_read ? "text-gray-600" : "text-gray-800 font-medium"}`}>{n.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                      <p
+                        className="text-sm"
+                        style={{ color: n.is_read ? "#9CA3AF" : "#E5E7EB", fontWeight: n.is_read ? 400 : 500 }}
+                      >
+                        {n.title}
+                      </p>
+                      <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#6B7280" }}>
                         <Clock className="w-3 h-3" />{timeAgo(n.created_at)}
                       </p>
                     </div>
-                    {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />}
+                    {!n.is_read && (
+                      <span className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ background: "#8B5CF6" }} />
+                    )}
                   </div>
                 );
               })}
@@ -284,45 +311,62 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-5">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">Upcoming Deadlines</h3>
+          {/* Upcoming Deadlines */}
+          <div className="premium-card p-5">
+            <h3 style={{ fontWeight: 600, color: "#E5E7EB", marginBottom: "0.75rem" }}>Upcoming Deadlines</h3>
             {isLoading ? (
-              <div className="flex items-center justify-center py-6 text-gray-300">
+              <div className="flex items-center justify-center py-6" style={{ color: "#6B7280" }}>
                 <Loader2 className="w-5 h-5 animate-spin" />
               </div>
             ) : !data?.upcoming_deadlines?.length ? (
-              <p className="text-sm text-gray-400 text-center py-4">No deadlines in next 30 days</p>
+              <p className="text-sm text-center py-4" style={{ color: "#6B7280" }}>
+                No deadlines in next 30 days
+              </p>
             ) : (
               <div className="space-y-2.5">
-                {data.upcoming_deadlines.map((d) => (
-                  <div key={d.project_id} className="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{d.name}</p>
-                      <p className="text-xs text-gray-500">{d.client_name ?? "Internal"}</p>
+                {data.upcoming_deadlines.map((d) => {
+                  const uStyle = urgencyStyle(d.days_left);
+                  return (
+                    <div
+                      key={d.project_id}
+                      className="flex items-center gap-3 p-2.5 rounded-xl"
+                      style={{ background: "rgba(255,255,255,0.04)" }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: "#E5E7EB" }}>{d.name}</p>
+                        <p className="text-xs" style={{ color: "#9CA3AF" }}>{d.client_name ?? "Internal"}</p>
+                      </div>
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                        style={uStyle}
+                      >
+                        {d.days_left === 0 ? "Today" : `${d.days_left}d`}
+                      </span>
                     </div>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${urgencyClass(d.days_left)}`}>
-                      {d.days_left === 0 ? "Today" : `${d.days_left}d`}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Task summary mini-card */}
+          {/* Task Summary */}
           {data?.tasks && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-900 mb-3">Task Summary</h3>
+            <div className="premium-card p-5">
+              <h3 style={{ fontWeight: 600, color: "#E5E7EB", marginBottom: "0.75rem" }}>Task Summary</h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "Total",       value: data.tasks.total,       color: "text-gray-700" },
-                  { label: "In Progress", value: data.tasks.in_progress, color: "text-blue-600" },
-                  { label: "Completed",   value: data.tasks.completed,   color: "text-emerald-600" },
-                  { label: "Overdue",     value: data.tasks.overdue,     color: "text-red-600" },
+                  { label: "Total",       value: data.tasks.total,       color: "#E5E7EB" },
+                  { label: "In Progress", value: data.tasks.in_progress, color: "#60a5fa" },
+                  { label: "Completed",   value: data.tasks.completed,   color: "#34d399" },
+                  { label: "Overdue",     value: data.tasks.overdue,     color: "#f87171" },
                 ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
-                    <p className={`text-xl font-bold ${color}`}>{value}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+                  <div
+                    key={label}
+                    className="rounded-xl p-3 text-center"
+                    style={{ background: "rgba(255,255,255,0.04)" }}
+                  >
+                    <p style={{ fontSize: "1.25rem", fontWeight: 700, color }}>{value}</p>
+                    <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.125rem" }}>{label}</p>
                   </div>
                 ))}
               </div>

@@ -72,7 +72,7 @@ interface ProductStats {
   by_category: CategoryStat[];
 }
 
-type ProductCreate = Omit<Product, "id" | "is_active" | "product_owner"> & { product_owner_id: string };
+type ProductCreate = Omit<Product, "id" | "is_active" | "product_owner"> & { product_owner_id: string | null };
 type ProductUpdate = Partial<ProductCreate>;
 
 // ---------------------------------------------------------------------------
@@ -678,27 +678,51 @@ export default function ProductsPage() {
                         </div>
                       </td>
                     </motion.tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {filtered.length === 0 && !isLoading && (
-              <div className="py-16 text-center text-gray-400 text-sm">
-                {dSearch || catFilter !== "all" || statusFilter !== "all"
-                  ? "No products match your filters."
-                  : "No products yet. Add your first product."}
-              </div>
-            )}
+                );
+              })}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <div className="py-16 text-center text-gray-400 text-sm">
+              {catFilter !== "all" || statusFilter !== "all" || dSearch
+                ? "No products match your filters."
+                : "No products yet. Add your first product."}
+            </div>
+          )}
           </div>
         )}
       </div>
 
       {/* Modals + Toast */}
       <AnimatePresence>
-        {showAdd && <AddModal key="add" onClose={() => setShowAdd(false)} showRevenue={showRevenue} onSuccess={m => showToast(m)} />}
-        {editProd && <EditModal key={`edit-${editProd.id}`} product={editProd} onClose={() => setEditProd(null)} showRevenue={showRevenue} onSuccess={m => showToast(m)} />}
-        {delProd  && <DeleteModal key={`del-${delProd.id}`} product={delProd} onClose={() => setDelProd(null)} onSuccess={m => showToast(m)} />}
-        {toast    && <Toast key="toast" {...toast} onClose={() => setToast(null)} />}
+        {showAdd && (
+          <AddModal
+            key="add-product-modal"
+            onClose={() => setShowAdd(false)}
+            showRevenue={showRevenue}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {editProd && (
+          <EditModal
+            key={`edit-product-${editProd.id}`}
+            product={editProd}
+            onClose={() => setEditProd(null)}
+            showRevenue={showRevenue}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {delProd && (
+          <DeleteModal
+            key={`delete-product-${delProd.id}`}
+            product={delProd}
+            onClose={() => setDelProd(null)}
+            onSuccess={(msg) => showToast(msg)}
+          />
+        )}
+        {toast && (
+          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+        )}
       </AnimatePresence>
     </div>
   );
