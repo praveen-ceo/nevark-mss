@@ -11,6 +11,7 @@ from app.api.v1.routes.notifications import router as notifications_router
 from app.api.v1.routes.projects import router as projects_router
 from app.api.v1.routes.tasks import router as tasks_router
 from app.api.v1.routes.products import router as products_router
+from app.api.v1.routes.ai import router as ai_router
 
 router = APIRouter()
 
@@ -25,3 +26,4 @@ router.include_router(documents_router,     prefix="/documents",     tags=["docu
 router.include_router(analytics_router,     prefix="/analytics",     tags=["analytics"])
 router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 router.include_router(products_router,      prefix="/products",      tags=["products"])
+router.include_router(ai_router,            prefix="/ai",            tags=["AI Assistant"])
