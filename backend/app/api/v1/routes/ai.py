@@ -10,44 +10,55 @@ import app.services.ai_chat as svc
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# RBAC — which intents each role may access
+# RBAC — maps role → allowed intent set
 # ---------------------------------------------------------------------------
-_ALL = {
-    "revenue_summary", "pending_payments", "project_finance",
-    "active_projects", "pending_tasks", "attendance_today",
-    "product_performance", "top_clients", "gst_summary", "general_help",
+_FINANCE_INTENTS = {
+    "revenue_this_month", "total_revenue",
+    "pending_invoices", "overdue_invoices",
+    "top_clients", "finance_summary", "gst_summary",
 }
+_PROJECT_INTENTS = {
+    "active_projects", "delayed_projects",
+    "top_projects", "pending_tasks",
+    "project_summary", "project_finance", "product_performance",
+}
+_HR_INTENTS = {
+    "employee_count", "attendance_today", "absent_today",
+}
+_GENERAL = {"general_ai"}
 
-_FINANCE = {"revenue_summary", "pending_payments", "project_finance",
-            "top_clients", "gst_summary", "general_help"}
-
-_TECH = {"active_projects", "pending_tasks", "product_performance",
-         "attendance_today", "general_help"}
-
-_MANAGER = {"active_projects", "pending_tasks", "attendance_today",
-            "product_performance", "general_help"}
-
-_EMPLOYEE = {"pending_tasks", "attendance_today", "general_help"}
+_ALL_INTENTS = _FINANCE_INTENTS | _PROJECT_INTENTS | _HR_INTENTS | _GENERAL
 
 ROLE_INTENTS: dict[str, set[str]] = {
-    "super_admin":     _ALL,
-    "admin":           _ALL,
-    "ceo":             _ALL,
-    "cfo":             _FINANCE,
-    "finance_manager": _FINANCE,
-    "cto":             _TECH,
-    "project_manager": _TECH,
-    "manager":         _MANAGER,
-    "hr_manager":      {"attendance_today", "general_help"},
-    "employee":        _EMPLOYEE,
-    "viewer":          {"general_help"},
+    "super_admin":     _ALL_INTENTS,
+    "admin":           _ALL_INTENTS,
+    "ceo":             _ALL_INTENTS,
+    "cfo":             _FINANCE_INTENTS | _GENERAL,
+    "finance_manager": _FINANCE_INTENTS | _GENERAL,
+    "cto":             _PROJECT_INTENTS | _HR_INTENTS | _GENERAL,
+    "project_manager": _PROJECT_INTENTS | _GENERAL,
+    "manager":         _PROJECT_INTENTS | _HR_INTENTS | _GENERAL,
+    "hr_manager":      _HR_INTENTS | _GENERAL,
+    # Employee: own tasks / own attendance only (scoped in service)
+    "employee":        {"pending_tasks", "attendance_today"} | _GENERAL,
+    "viewer":          _GENERAL,
 }
+
 
 def _allowed_intents(roles: list[str]) -> set[str]:
     allowed: set[str] = set()
     for role in roles:
-        allowed |= ROLE_INTENTS.get(role, {"general_help"})
-    return allowed or {"general_help"}
+        allowed |= ROLE_INTENTS.get(role, _GENERAL)
+    return allowed or _GENERAL
+
+
+def _is_employee_only(roles: list[str]) -> bool:
+    """True when the user has only the 'employee' role (no elevated role)."""
+    elevated = {
+        "super_admin", "admin", "ceo", "cto", "cfo",
+        "manager", "hr_manager", "project_manager", "finance_manager",
+    }
+    return "employee" in roles and not any(r in elevated for r in roles)
 
 
 # ---------------------------------------------------------------------------
@@ -60,36 +71,81 @@ async def chat(body: ChatRequest, db: DBDep, current_user: CurrentUser):
         allowed    = _allowed_intents(role_names)
         intent     = svc.detect_intent(body.message)
 
-        # Downgrade to general_help if role cannot access the detected intent
+        # Unauthorised intent → polite refusal
         if intent not in allowed:
-            intent = "general_help"
+            # If general business question, route to general_ai (which IS always allowed)
+            if intent == "general_ai" or not svc.is_business_or_mss_question(body.message):
+                answer, data = await svc.general_ai_response(body.message)
+                return ChatResponse(answer=answer, intent="general_ai", data=data)
+            return ChatResponse(
+                answer=(
+                    "You do not have permission to view this business data. "
+                    "Please contact the administrator if you need access."
+                ),
+                intent=intent,
+                data=[],
+            )
 
-        # Employee-scoped intents pass the user_id so service filters to own data
-        is_employee_only = "employee" in role_names and not any(
-            r in role_names for r in ("super_admin","admin","ceo","cto","cfo","manager","hr_manager","project_manager","finance_manager")
-        )
-        scoped_user_id: str | None = str(current_user.id) if is_employee_only else None
+        # Employee-scoped: filter tasks / attendance to own records
+        scoped_uid: str | None = str(current_user.id) if _is_employee_only(role_names) else None
 
-        if intent == "revenue_summary":
-            answer, data = await svc.fetch_revenue_summary(db)
-        elif intent == "pending_payments":
-            answer, data = await svc.fetch_pending_payments(db)
-        elif intent == "project_finance":
-            answer, data = await svc.fetch_project_finance(db)
-        elif intent == "active_projects":
-            answer, data = await svc.fetch_active_projects(db)
-        elif intent == "pending_tasks":
-            answer, data = await svc.fetch_pending_tasks(db, scoped_user_id)
-        elif intent == "attendance_today":
-            answer, data = await svc.fetch_attendance_today(db, scoped_user_id)
-        elif intent == "product_performance":
-            answer, data = await svc.fetch_product_performance(db)
+        # ── Dispatch ──────────────────────────────────────────────────────
+        if intent == "revenue_this_month":
+            answer, data = await svc.fetch_revenue_this_month(db)
+
+        elif intent == "total_revenue":
+            answer, data = await svc.fetch_total_revenue(db)
+
+        elif intent == "pending_invoices":
+            answer, data = await svc.fetch_pending_invoices(db)
+
+        elif intent == "overdue_invoices":
+            answer, data = await svc.fetch_overdue_invoices(db)
+
         elif intent == "top_clients":
             answer, data = await svc.fetch_top_clients(db)
+
+        elif intent == "top_projects":
+            answer, data = await svc.fetch_top_projects(db)
+
+        elif intent == "active_projects":
+            answer, data = await svc.fetch_active_projects(db)
+
+        elif intent == "delayed_projects":
+            answer, data = await svc.fetch_delayed_projects(db)
+
+        elif intent == "employee_count":
+            answer, data = await svc.fetch_employee_count(db)
+
+        elif intent == "attendance_today":
+            answer, data = await svc.fetch_attendance_today(db, scoped_uid)
+
+        elif intent == "absent_today":
+            answer, data = await svc.fetch_absent_today(db)
+
+        elif intent == "pending_tasks":
+            answer, data = await svc.fetch_pending_tasks(db, scoped_uid)
+
+        elif intent == "finance_summary":
+            answer, data = await svc.fetch_finance_summary(db)
+
+        elif intent == "project_summary":
+            answer, data = await svc.fetch_project_summary(db)
+
+        elif intent == "document_summary":
+            answer, data = await svc.fetch_document_summary(db)
+
         elif intent == "gst_summary":
             answer, data = await svc.fetch_gst_summary(db)
-        else:
-            answer, data = svc.general_help()
+
+        elif intent == "project_finance":
+            answer, data = await svc.fetch_project_finance(db)
+
+        elif intent == "product_performance":
+            answer, data = await svc.fetch_product_performance(db)
+
+        else:  # general_ai
+            answer, data = await svc.general_ai_response(body.message)
 
         return ChatResponse(answer=answer, intent=intent, data=data)
 

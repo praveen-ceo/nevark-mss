@@ -26,23 +26,26 @@ interface ChatResponse {
 // Suggested chips
 // ---------------------------------------------------------------------------
 const SUGGESTIONS = [
-  { label: "Total revenue",         query: "What is total revenue?" },
-  { label: "Pending payments",      query: "Show pending payments"  },
-  { label: "Active projects",       query: "Show active projects"   },
-  { label: "Project finance",       query: "Show project finance"   },
-  { label: "Pending tasks",         query: "Show pending tasks"     },
-  { label: "Attendance today",      query: "Who has attendance today?" },
-  { label: "Product performance",   query: "Show product performance" },
-  { label: "Top clients",           query: "Show top clients"       },
-  { label: "GST summary",           query: "What is GST amount?"    },
+  { label: "Revenue this month",  query: "What is revenue this month?"      },
+  { label: "Pending invoices",    query: "Show pending invoices"            },
+  { label: "Overdue invoices",    query: "Show overdue invoices"            },
+  { label: "Top clients",         query: "Who are top clients?"             },
+  { label: "Delayed projects",    query: "Which projects are delayed?"      },
+  { label: "Attendance today",    query: "Attendance today"                 },
+  { label: "Absent today",        query: "Who is absent today?"            },
+  { label: "Pending tasks",       query: "Show pending tasks"              },
+  { label: "Finance summary",     query: "Give finance summary"            },
+  { label: "Draft client email",  query: "Draft an email to a client"      },
+  { label: "Explain GST filing",  query: "Explain GST filing"              },
 ];
 
 const WELCOME: AiMessage = {
   role: "assistant",
   content:
-    "Hello! I am your Nevark business intelligence assistant. " +
-    "Ask me about revenue, invoices, projects, tasks, attendance, products, or clients. " +
-    "I query your live MSS database for real-time answers.",
+    "Hello! I am your Nevark MSS AI Assistant. " +
+    "Ask me about revenue, invoices, projects, tasks, attendance, or clients — " +
+    "I query your live database for real-time answers. " +
+    "I can also help with general questions like drafting emails or explaining GST.",
 };
 
 // ---------------------------------------------------------------------------
