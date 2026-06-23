@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DBDep
@@ -16,9 +17,22 @@ async def list_notifications(
     current_user: CurrentUser,
     skip: int = 0,
     limit: int = 50,
+    entity_type: Optional[str] = None,
 ):
+    """List notifications.
+
+    entity_type: optional comma-separated list of entity_type values to filter by,
+    e.g. ``?entity_type=task`` or ``?entity_type=employee,leave``.
+    Omit (or pass an empty string) to return all.
+    """
+    entity_types: Optional[list[str]] = None
+    if entity_type:
+        entity_types = [t.strip().lower() for t in entity_type.split(",") if t.strip()]
+
     try:
-        items, total, unread = await svc.list_notifications(db, current_user.id, skip=skip, limit=limit)
+        items, total, unread = await svc.list_notifications(
+            db, current_user.id, skip=skip, limit=limit, entity_types=entity_types
+        )
         return NotificationList(
             total=total,
             unread=unread,

@@ -19,6 +19,8 @@ async def push(
     recipient_id: Optional[uuid.UUID] = None,
 ) -> Notification:
     """Insert a notification. recipient_id=None → broadcast."""
+    # Normalise so category filters always work
+    entity_type = (entity_type or "system").strip().lower()
     notif = Notification(
         recipient_id=recipient_id,
         entity_type=entity_type,
@@ -43,12 +45,20 @@ async def list_notifications(
     user_id: uuid.UUID,
     skip: int = 0,
     limit: int = 50,
+    entity_types: Optional[List[str]] = None,
 ) -> tuple[List[Notification], int, int]:
-    """Returns (items, total, unread)."""
+    """Returns (items, total, unread).
+
+    entity_types: when provided, only notifications whose entity_type is in
+    the list are returned.  Pass None (or an empty list) to return all.
+    """
     base = select(Notification).where(
         Notification.is_active == True,  # noqa: E712
         _visible(user_id),
     )
+    if entity_types:
+        base = base.where(Notification.entity_type.in_(entity_types))
+
     total_q = await db.execute(select(func.count()).select_from(base.subquery()))
     total = total_q.scalar_one()
 

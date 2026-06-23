@@ -26,13 +26,33 @@ interface NotificationList { total: number; unread: number; items: Notification[
 const FILTERS = ["all", "task", "project", "finance", "document", "employee", "system"] as const;
 type Filter = typeof FILTERS[number];
 
+/**
+ * Maps each UI category to the entity_type values stored in the DB.
+ * These are sent as a comma-separated `entity_type` query param to the backend.
+ *
+ * DB CHECK constraint allows:
+ *   task | project | finance | document | employee | system | leave
+ */
+const CATEGORY_ENTITY_TYPES: Record<Filter, string[]> = {
+  all:      [],
+  task:     ["task"],
+  project:  ["project"],
+  finance:  ["finance"],
+  document: ["document"],
+  employee: ["employee", "leave"],
+  system:   ["system"],
+} as const;
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
 const api = {
   list: (skip: number, filter: Filter) => {
     const params = new URLSearchParams({ skip: String(skip), limit: "30" });
-    if (filter !== "all") params.set("entity_type", filter);
+    if (filter !== "all") {
+      const types = CATEGORY_ENTITY_TYPES[filter];
+      if (types.length > 0) params.set("entity_type", types.join(","));
+    }
     return apiClient.get<NotificationList>(`/notifications?${params}`).then((r) => r.data);
   },
   markRead: (id: string) => apiClient.patch(`/notifications/${id}/read`).then((r) => r.data),
