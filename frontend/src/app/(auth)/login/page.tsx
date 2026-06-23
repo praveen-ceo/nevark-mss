@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Lock, Mail, Zap } from "lucide-react";
 import { login, me } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
+import { V, ERR_CLS, EMAIL_RE } from "@/lib/validation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,9 +17,21 @@ export default function LoginPage() {
   const [showPw, setShowPw]   = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [fe, setFe]           = useState<Record<string, string>>({});
+
+  function validateForm(): boolean {
+    const errs: Record<string, string> = {};
+    const emailErr = V.chain(V.required, V.email)(email);
+    if (emailErr) errs.email = emailErr;
+    const pwErr = V.required(password, "Password");
+    if (pwErr) errs.password = pwErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!validateForm()) return;
     setError(null);
     setLoading(true);
     try {
@@ -227,7 +240,7 @@ export default function LoginPage() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); if (fe.email) setFe(p => ({ ...p, email: "" })); }}
                     required
                     placeholder="you@nevark.com"
                     style={{
@@ -255,6 +268,7 @@ export default function LoginPage() {
                     }}
                   />
                 </div>
+                {fe.email && <span className={ERR_CLS} style={{ color: "#F87171" }}>{fe.email}</span>}
               </div>
 
               {/* Password */}
@@ -270,7 +284,7 @@ export default function LoginPage() {
                   <input
                     type={showPw ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); if (fe.password) setFe(p => ({ ...p, password: "" })); }}
                     required
                     placeholder="••••••••"
                     style={{
@@ -308,6 +322,7 @@ export default function LoginPage() {
                     {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {fe.password && <span className={ERR_CLS} style={{ color: "#F87171" }}>{fe.password}</span>}
               </div>
 
               {/* Error */}
@@ -359,24 +374,19 @@ export default function LoginPage() {
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow = "0 4px 18px rgba(124,58,237,0.4)";
                   e.currentTarget.style.transform = "translateY(0)";
-                }}
+                       }}
               >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? "Signing in…" : "Sign in to Nevark MSS"}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Sign in to Nevark MSS
+                  </>
+                )}
               </button>
             </form>
-
-            {/* Divider */}
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: "1.5rem", paddingTop: "1.25rem" }}>
-              <p style={{ textAlign: "center", fontSize: "0.7rem", color: "#374151", letterSpacing: "0.04em" }}>
-                NEVARK GROUPS Management &amp; Smart System · v1.0
-              </p>
-            </div>
           </div>
-
-          <p style={{ textAlign: "center", fontSize: "0.7rem", color: "#1F2937", marginTop: "1.25rem" }}>
-            Secured by Nevark Enterprise Auth
-          </p>
         </motion.div>
       </div>
     </div>

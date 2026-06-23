@@ -9,6 +9,7 @@ import {
   Plus, Search, Target, X, CheckCheck, ListTodo,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
+import { V, ERR_CLS } from "@/lib/validation";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
 
@@ -192,9 +193,20 @@ function TaskModal({ initial, onClose, onSuccess, projects, employees }: {
     estimated_hours: String(initial.estimated_hours ?? ""),
   } : EMPTY_TASK);
   const [err, setErr] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const set = (k: string) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }));
+      if (fe[k]) setFe(p => ({ ...p, [k]: "" }));
+    };
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const titleErr = V.chain(V.required, V.minLen(2, "Title"))(form.title);
+    if (titleErr) errs.title = titleErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const mut = useMutation({
     mutationFn: () => {
@@ -219,9 +231,10 @@ function TaskModal({ initial, onClose, onSuccess, projects, employees }: {
 
   return (
     <Modal title={isEdit ? "Edit Task" : "New Task"} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); mut.mutate(); }} className="space-y-4">
+      <form onSubmit={e => { e.preventDefault(); if (validate()) mut.mutate(); }} className="space-y-4">
         <Field label="Title" required>
           <input value={form.title} onChange={set("title")} placeholder="Task title" className={inputCls} />
+          {fe.title && <span className={ERR_CLS}>{fe.title}</span>}
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Project" required>
@@ -612,8 +625,27 @@ export default function TasksPage() {
         {modal?.type === "edit-ms" && activeMs && (
           <MilestoneModal key={`edit-ms-${activeMs.id}`} initial={activeMs} onClose={() => setModal(null)} onSuccess={showToast} projects={projects} />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {toast && (
-          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className={cn(
+              "fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium",
+              toast.type === "success"
+                ? "bg-white border border-gray-100 text-gray-800"
+                : "bg-red-50 border border-red-100 text-red-700"
+            )}
+          >
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              : <AlertCircle  className="w-4 h-4 text-red-500 shrink-0" />}
+            {toast.msg}
+            <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

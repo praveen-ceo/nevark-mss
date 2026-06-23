@@ -32,8 +32,8 @@ router = APIRouter()
 @router.post("/check-in", response_model=AttendanceResponse, status_code=status.HTTP_200_OK)
 async def check_in(data: CheckInRequest, db: DBDep, current_user: CurrentUser):
     try:
-        record = await svc.check_in(db, current_user.id, notes=data.notes)
-        return AttendanceResponse.model_validate(record)
+        # Service returns AttendanceResponse (schema) — no lazy-load risk
+        return await svc.check_in(db, current_user.id, notes=data.notes)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -43,8 +43,7 @@ async def check_in(data: CheckInRequest, db: DBDep, current_user: CurrentUser):
 @router.post("/check-out", response_model=AttendanceResponse, status_code=status.HTTP_200_OK)
 async def check_out(data: CheckOutRequest, db: DBDep, current_user: CurrentUser):
     try:
-        record = await svc.check_out(db, current_user.id, notes=data.notes)
-        return AttendanceResponse.model_validate(record)
+        return await svc.check_out(db, current_user.id, notes=data.notes)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -54,10 +53,7 @@ async def check_out(data: CheckOutRequest, db: DBDep, current_user: CurrentUser)
 @router.get("/today", response_model=Optional[AttendanceResponse])
 async def today_status(db: DBDep, current_user: CurrentUser):
     try:
-        record = await svc.get_today(db, current_user.id)
-        if record is None:
-            return None
-        return AttendanceResponse.model_validate(record)
+        return await svc.get_today(db, current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -77,7 +73,7 @@ async def list_attendance(
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
 ):
-    records = await svc.list_attendance(
+    return await svc.list_attendance(
         db,
         employee_id=employee_id,
         date_from=date_from,
@@ -86,14 +82,12 @@ async def list_attendance(
         skip=skip,
         limit=limit,
     )
-    return [AttendanceResponse.model_validate(r) for r in records]
 
 
 @router.post("", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)
 async def create_attendance(data: AttendanceCreate, db: DBDep, _: CurrentUser):
     try:
-        rec = await svc.create_attendance(db, data)
-        return AttendanceResponse.model_validate(rec)
+        return await svc.create_attendance(db, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -105,8 +99,7 @@ async def update_attendance(
     record_id: uuid.UUID, data: AttendanceUpdate, db: DBDep, _: CurrentUser
 ):
     try:
-        rec = await svc.update_attendance(db, record_id, data)
-        return AttendanceResponse.model_validate(rec)
+        return await svc.update_attendance(db, record_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except Exception as exc:
@@ -147,7 +140,7 @@ async def submit_leave(data: LeaveRequestCreate, db: DBDep, current_user: Curren
             )
         except Exception:
             pass
-        return LeaveRequestResponse.model_validate(leave)
+        return leave  # already a LeaveRequestResponse schema object
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -164,7 +157,7 @@ async def list_leave(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ):
-    records = await svc.list_leave(
+    return await svc.list_leave(
         db,
         employee_id=employee_id,
         status=status,
@@ -172,14 +165,12 @@ async def list_leave(
         skip=skip,
         limit=limit,
     )
-    return [LeaveRequestResponse.model_validate(r) for r in records]
 
 
 @router.get("/leave/{leave_id}", response_model=LeaveRequestResponse)
 async def get_leave(leave_id: uuid.UUID, db: DBDep, _: CurrentUser):
     try:
-        leave = await svc.get_leave(db, leave_id)
-        return LeaveRequestResponse.model_validate(leave)
+        return await svc.get_leave(db, leave_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -189,16 +180,16 @@ async def approve_leave(leave_id: uuid.UUID, db: DBDep, current_user: CurrentUse
     try:
         leave = await svc.approve_leave(db, leave_id, current_user.id)
         try:
-            name = f"{leave.employee.first_name} {leave.employee.last_name}".strip() if leave.employee else "Employee"
+            # leave is a LeaveRequestResponse schema — use flat fields, no ORM lazy-load
+            name = leave.employee_name or "Employee"
             await notif_svc.push(
                 db, "leave",
                 f"Leave approved for {name}: {leave.leave_type.value} ({leave.start_date} – {leave.end_date})",
                 entity_id=leave.id,
-                recipient_id=leave.employee.user_id if leave.employee else None,
             )
         except Exception:
             pass
-        return LeaveRequestResponse.model_validate(leave)
+        return leave
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -212,16 +203,15 @@ async def reject_leave(
     try:
         leave = await svc.reject_leave(db, leave_id, current_user.id, data.rejection_reason)
         try:
-            name = f"{leave.employee.first_name} {leave.employee.last_name}".strip() if leave.employee else "Employee"
+            name = leave.employee_name or "Employee"
             await notif_svc.push(
                 db, "leave",
                 f"Leave rejected for {name}: {leave.leave_type.value} ({leave.start_date} – {leave.end_date})",
                 entity_id=leave.id,
-                recipient_id=leave.employee.user_id if leave.employee else None,
             )
         except Exception:
             pass
-        return LeaveRequestResponse.model_validate(leave)
+        return leave
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
@@ -231,8 +221,7 @@ async def reject_leave(
 @router.put("/leave/{leave_id}/cancel", response_model=LeaveRequestResponse)
 async def cancel_leave(leave_id: uuid.UUID, db: DBDep, current_user: CurrentUser):
     try:
-        leave = await svc.cancel_leave(db, leave_id, current_user.id)
-        return LeaveRequestResponse.model_validate(leave)
+        return await svc.cancel_leave(db, leave_id, current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:

@@ -9,6 +9,7 @@ import {
   Loader2, Pencil, Plus, Search, Trash2, X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
+import { V, ERR_CLS } from "@/lib/validation";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
 
@@ -167,15 +168,32 @@ function ProjectForm({ form, setForm, clients, err, isPending, onSubmit, onClose
   clients: ClientBrief[]; err: string|null; isPending: boolean;
   onSubmit: ()=>void; onClose: ()=>void; submitLabel: string;
 }) {
+  const [fe, setFe] = useState<Record<string, string>>({});
   const set = (k: keyof ProjectCreate) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }));
+      if (fe[k]) setFe(p => ({ ...p, [k]: "" }));
+    };
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const nameErr = V.chain(V.required, V.minLen(2, "Project name"))(form.name);
+    if (nameErr) errs.name = nameErr;
+    if (form.start_date && form.end_date && form.end_date < form.start_date)
+      errs.end_date = "End date cannot be before start date.";
+    if (form.budget !== "" && Number(form.budget) < 0)
+      errs.budget = "Budget cannot be negative.";
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
+
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <Field label="Project Name" required>
             <input value={form.name} onChange={set("name")} placeholder="e.g. ERP Integration" className={inputCls}/>
+            {fe.name && <span className={ERR_CLS}>{fe.name}</span>}
           </Field>
         </div>
         <Field label="Client">
@@ -204,10 +222,12 @@ function ProjectForm({ form, setForm, clients, err, isPending, onSubmit, onClose
         </Field>
         <Field label="End Date">
           <input type="date" value={form.end_date} onChange={set("end_date")} className={inputCls}/>
+          {fe.end_date && <span className={ERR_CLS}>{fe.end_date}</span>}
         </Field>
         <div className="col-span-2">
           <Field label="Budget">
             <input type="number" value={form.budget} onChange={set("budget")} placeholder="e.g. 500000" className={inputCls}/>
+            {fe.budget && <span className={ERR_CLS}>{fe.budget}</span>}
           </Field>
         </div>
         <div className="col-span-2">
@@ -220,7 +240,7 @@ function ProjectForm({ form, setForm, clients, err, isPending, onSubmit, onClose
       {err && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
-        <button onClick={onSubmit} disabled={isPending || !form.name.trim()}
+        <button onClick={() => { if (validate()) onSubmit(); }} disabled={isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
           {isPending && <Loader2 className="w-4 h-4 animate-spin"/>}
           {submitLabel}
@@ -331,6 +351,7 @@ export default function ProjectsPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [editP, setEditP]         = useState<Project|null>(null);
   const [delP, setDelP]           = useState<Project|null>(null);
+  const showToast = (msg: string, type: "success"|"error" = "success") => setToast({ msg, type });
   const [toast, setToast]         = useState<{ msg:string; type:"success"|"error" }|null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -516,34 +537,38 @@ export default function ProjectsPage() {
       <AnimatePresence>
         {showAdd && (
           <AddModal
-            key="add-project-modal"
+            clients={clients}
             onClose={() => setShowAdd(false)}
-            clients={clients}
-            onSuccess={(m) => setToast({ msg: m, type: "success" })}
+            onSuccess={m => showToast(m)}
           />
         )}
-
         {editP && (
-          <EditModal
-            key={`edit-project-${editP.id}`}
-            project={editP}
-            onClose={() => setEditP(null)}
-            clients={clients}
-            onSuccess={(m) => setToast({ msg: m, type: "success" })}
-          />
+          <EditModal key={editP.id} project={editP} clients={clients} onClose={() => setEditP(null)} onSuccess={m => showToast(m)} />
         )}
-
         {delP && (
-          <DeactivateModal
-            key={`deactivate-project-${delP.id}`}
-            project={delP}
-            onClose={() => setDelP(null)}
-            onSuccess={(m) => setToast({ msg: m, type: "success" })}
-          />
+          <DeactivateModal project={delP} onClose={() => setDelP(null)} onSuccess={m => showToast(m)} />
         )}
+      </AnimatePresence>
 
+      <AnimatePresence>
         {toast && (
-          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className={cn(
+              "fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium",
+              toast.type === "success"
+                ? "bg-white border border-gray-100 text-gray-800"
+                : "bg-red-50 border border-red-100 text-red-700"
+            )}
+          >
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              : <AlertCircle  className="w-4 h-4 text-red-500 shrink-0" />}
+            {toast.msg}
+            <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

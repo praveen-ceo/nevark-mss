@@ -9,6 +9,7 @@ import {
   Download, Loader2, Pencil, Plus, Search, Trash2, Users, X,
 } from "lucide-react";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
+import { V, ERR_CLS } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
@@ -106,9 +107,27 @@ function ClientForm({ form, setForm, err, isPending, onSubmit, onClose, submitLa
   err: string | null; isPending: boolean;
   onSubmit: () => void; onClose: () => void; submitLabel: string;
 }) {
+  const [fe, setFe] = useState<Record<string, string>>({});
   const set = (k: keyof ClientCreate) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }));
+      if (fe[k]) setFe(p => ({ ...p, [k]: "" }));
+    };
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const nameErr = V.required(form.name, "Client name");
+    if (nameErr) errs.name = nameErr;
+    const emailErr = V.email(form.email);
+    if (emailErr) errs.email = emailErr;
+    const phoneErr = V.phone(form.phone);
+    if (phoneErr) errs.phone = phoneErr;
+    const gstinErr = V.gstin(form.tax_id);
+    if (gstinErr) errs.tax_id = gstinErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
+
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
@@ -116,17 +135,27 @@ function ClientForm({ form, setForm, err, isPending, onSubmit, onClose, submitLa
         <div className="col-span-2">
           <Field label="Client Name" required>
             <input value={form.name} onChange={set("name")} placeholder="e.g. Acme Corp" className={inputCls}/>
+            {fe.name && <span className={ERR_CLS}>{fe.name}</span>}
           </Field>
         </div>
         <Field label="Industry"><input value={form.industry} onChange={set("industry")} placeholder="e.g. Technology" className={inputCls}/></Field>
         <Field label="Website"><input value={form.website} onChange={set("website")} placeholder="https://..." className={inputCls}/></Field>
-        <Field label="Email"><input type="email" value={form.email} onChange={set("email")} placeholder="contact@company.com" className={inputCls}/></Field>
-        <Field label="Phone"><input value={form.phone} onChange={set("phone")} placeholder="+91 98765 43210" className={inputCls}/></Field>
+        <Field label="Email">
+          <input type="email" value={form.email} onChange={set("email")} placeholder="contact@company.com" className={inputCls}/>
+          {fe.email && <span className={ERR_CLS}>{fe.email}</span>}
+        </Field>
+        <Field label="Phone">
+          <input value={form.phone} onChange={set("phone")} placeholder="9876543210" className={inputCls}/>
+          {fe.phone && <span className={ERR_CLS}>{fe.phone}</span>}
+        </Field>
         <div className="col-span-2"><p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100 pt-2">Location</p></div>
         <div className="col-span-2"><Field label="Address"><input value={form.address} onChange={set("address")} placeholder="Street address" className={inputCls}/></Field></div>
         <Field label="City"><input value={form.city} onChange={set("city")} placeholder="City" className={inputCls}/></Field>
         <Field label="Country"><input value={form.country} onChange={set("country")} placeholder="Country" className={inputCls}/></Field>
-        <Field label="Tax ID / GST"><input value={form.tax_id} onChange={set("tax_id")} placeholder="GST / Tax number" className={inputCls}/></Field>
+        <Field label="Tax ID / GST">
+          <input value={form.tax_id} onChange={set("tax_id")} placeholder="27AAPFU0939F1ZV" className={inputCls}/>
+          {fe.tax_id && <span className={ERR_CLS}>{fe.tax_id}</span>}
+        </Field>
         <div/>
         <div className="col-span-2">
           <Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} placeholder="Additional notes..." className={inputCls+" resize-none"}/></Field>
@@ -135,7 +164,7 @@ function ClientForm({ form, setForm, err, isPending, onSubmit, onClose, submitLa
       {err && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
-        <button onClick={onSubmit} disabled={isPending || !form.name.trim()}
+        <button onClick={() => { if (validate()) onSubmit(); }} disabled={isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
           {isPending && <Loader2 className="w-4 h-4 animate-spin"/>}
           {submitLabel}
@@ -445,43 +474,29 @@ export default function ClientsPage() {
             </table>
             {filtered.length === 0 && (
               <div className="py-16 text-center text-gray-400 text-sm">
-                {dSearch || industryF !== "All" || statusF !== "All"
-                  ? "No clients match your filters."
-                  : "No clients yet. Add your first client."}
+                {dSearch || industryF !== "All" || statusF !== "All" ? "No clients match your filters." : "No clients yet. Add one to get started."}
               </div>
             )}
           </div>
         )}
       </div>
 
- <AnimatePresence>
-  {showAdd && (
-    <AddModal
-      key="add-client-modal"
-      onClose={() => setShowAdd(false)}
-      onSuccess={(m) => setToast({ msg: m, type: "success" })}
-    />
-  )}
+      {showAdd && <AddModal onClose={() => setShowAdd(false)} onSuccess={m => setToast({ msg: m, type: "success" })} />}
+      {editClient && <EditModal client={editClient} onClose={() => setEditClient(null)} onSuccess={m => setToast({ msg: m, type: "success" })} />}
+      {delClient && <DeactivateModal client={delClient} onClose={() => setDelClient(null)} onSuccess={m => setToast({ msg: m, type: "success" })} />}
 
-  {editClient && (
-    <EditModal
-      key={`edit-client-${editClient.id}`}
-      client={editClient}
-      onClose={() => setEditClient(null)}
-      onSuccess={(m) => setToast({ msg: m, type: "success" })}
-    />
-  )}
-
-  {delClient && (
-    <DeactivateModal
-      key={`deactivate-client-${delClient.id}`}
-      client={delClient}
-      onClose={() => setDelClient(null)}
-      onSuccess={(m) => setToast({ msg: m, type: "success" })}
-    />
-  )}
-</AnimatePresence>
-{toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:20 }}
+            className={cn("fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium",
+              toast.type === "success" ? "bg-white border border-gray-100 text-gray-800" : "bg-red-50 border border-red-100 text-red-700")}>
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0"/>
+              : <AlertCircle className="w-4 h-4 text-red-500 shrink-0"/>}
+            {toast.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

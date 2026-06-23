@@ -2,7 +2,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-
+from pydantic import field_validator
+import re
 from pydantic import BaseModel, EmailStr
 
 from app.models.enums import EmploymentType
@@ -40,6 +41,20 @@ class EmployeeCreate(BaseModel):
     # Optional role assignment (role name, e.g. "employee", "hr_manager")
     role: Optional[str] = None
 
+    @field_validator("full_name", "first_name", "last_name")
+    @classmethod
+    def validate_names(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Name must contain at least 2 characters")
+        return v.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        if v and not re.fullmatch(r"^[6-9]\d{9}$", v):
+            raise ValueError("Invalid mobile number")
+        return v
+
 
 class EmployeeUpdate(BaseModel):
     full_name: Optional[str] = None          # propagated to user.full_name
@@ -54,6 +69,20 @@ class EmployeeUpdate(BaseModel):
     address: Optional[str] = None
     salary: Optional[Decimal] = None
     is_active: Optional[bool] = None
+
+    @field_validator("full_name", "first_name", "last_name")
+    @classmethod
+    def validate_names(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Name must contain at least 2 characters")
+        return v.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        if v and not re.fullmatch(r"^[6-9]\d{9}$", v):
+            raise ValueError("Invalid mobile number")
+        return v
 
 
 class EmployeeResponse(BaseModel):

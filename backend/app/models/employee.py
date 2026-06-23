@@ -154,7 +154,11 @@ class Attendance(BaseModel):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[AttendanceStatus] = mapped_column(
-        Enum(AttendanceStatus, name="attendance_status_enum"), nullable=False
+    Enum(
+    AttendanceStatus,
+    name="attendance_status_enum",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+), nullable=False
     )
     work_hours: Mapped[Optional[Numeric]] = mapped_column(Numeric(5, 2), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

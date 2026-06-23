@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-
+from pydantic import model_validator
 from pydantic import BaseModel
 
 from app.models.enums import MilestoneStatus, Priority, ProjectStatus, TaskStatus
@@ -44,6 +44,24 @@ class ProjectCreate(BaseModel):
     budget: Optional[Decimal] = None
     currency: str = "INR"
 
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if (
+            self.start_date
+            and self.end_date
+            and self.end_date < self.start_date
+        ):
+            raise ValueError(
+                "End date cannot be before start date"
+            )
+
+        if self.budget is not None and self.budget < 0:
+            raise ValueError(
+                "Budget cannot be negative"
+            )
+
+        return self
+
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -57,6 +75,24 @@ class ProjectUpdate(BaseModel):
     budget: Optional[Decimal] = None
     currency: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if (
+            self.start_date
+            and self.end_date
+            and self.end_date < self.start_date
+        ):
+            raise ValueError(
+                "End date cannot be before start date"
+            )
+
+        if self.budget is not None and self.budget < 0:
+            raise ValueError(
+                "Budget cannot be negative"
+            )
+
+        return self
 
 
 class ProjectResponse(BaseModel):

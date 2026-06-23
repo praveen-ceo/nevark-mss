@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.models.enums import MilestoneStatus, Priority, TaskStatus
 
@@ -32,6 +32,20 @@ class TaskCreate(BaseModel):
     priority: Priority = Priority.MEDIUM
     due_date: Optional[date] = None
     estimated_hours: Optional[Decimal] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Task title must be at least 2 characters.")
+        return v.strip()
+
+    @field_validator("estimated_hours")
+    @classmethod
+    def validate_hours(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("Estimated hours cannot be negative.")
+        return v
 
 
 class TaskUpdate(BaseModel):

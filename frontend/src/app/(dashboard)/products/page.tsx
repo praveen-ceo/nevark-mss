@@ -32,6 +32,7 @@ import {
   Loader2, Package, Pencil, Plus, Search, Trash2, X,
 } from "lucide-react";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
+import { V, ERR_CLS } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { useAuthStore } from "@/store/authStore";
@@ -198,15 +199,19 @@ function Field({ label, required, children }: { label: string; required?: boolea
 // ---------------------------------------------------------------------------
 
 function ProductForm({
-  form, setForm, showRevenue,
+  form, setForm, showRevenue, fe = {}, onClearFe,
 }: {
   form: ProductCreate;
   setForm: React.Dispatch<React.SetStateAction<ProductCreate>>;
   showRevenue: boolean;
+  fe?: Record<string, string>;
+  onClearFe?: (k: string) => void;
 }) {
   const set = (k: keyof ProductCreate) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value || null }));
+      if (fe[k]) onClearFe?.(k);
+    };
 
   return (
     <div className="grid grid-cols-2 gap-4">
@@ -215,10 +220,12 @@ function ProductForm({
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Identity</p>
       </div>
       <Field label="Product Name" required>
-        <input value={form.name ?? ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nevark Cloud" className={inputCls} />
+        <input value={form.name ?? ""} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fe.name) onClearFe?.("name"); }} placeholder="Nevark Cloud" className={inputCls} />
+        {fe.name && <span className={ERR_CLS}>{fe.name}</span>}
       </Field>
       <Field label="Product Code" required>
-        <input value={form.product_code ?? ""} onChange={e => setForm(f => ({ ...f, product_code: e.target.value }))} placeholder="NTK-001" className={inputCls} />
+        <input value={form.product_code ?? ""} onChange={e => { setForm(f => ({ ...f, product_code: e.target.value })); if (fe.product_code) onClearFe?.("product_code"); }} placeholder="NTK-001" className={inputCls} />
+        {fe.product_code && <span className={ERR_CLS}>{fe.product_code}</span>}
       </Field>
       <Field label="Category" required>
         <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as ProductCategory }))} className={inputCls}>
@@ -274,6 +281,17 @@ function AddModal({ onClose, showRevenue, onSuccess }: { onClose: () => void; sh
   const qc = useQueryClient();
   const [form, setForm] = useState<ProductCreate>({ ...EMPTY_FORM });
   const [err, setErr] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const nameErr = V.chain(V.required, V.minLen(2, "Product name"))(form.name ?? "");
+    if (nameErr) errs.name = nameErr;
+    const codeErr = V.chain(V.required, V.minLen(2, "Product code"))(form.product_code ?? "");
+    if (codeErr) errs.product_code = codeErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const mut = useMutation({
     mutationFn: () => api.create({
@@ -286,13 +304,13 @@ function AddModal({ onClose, showRevenue, onSuccess }: { onClose: () => void; sh
 
   return (
     <Modal title="Add Product" onClose={onClose} wide>
-      <ProductForm form={form} setForm={setForm} showRevenue={showRevenue} />
+      <ProductForm form={form} setForm={setForm} showRevenue={showRevenue} fe={fe} onClearFe={k => setFe(p => ({ ...p, [k]: "" }))} />
       {err && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
         <button
-          onClick={() => mut.mutate()}
-          disabled={mut.isPending || !form.name || !form.product_code}
+          onClick={() => { if (validate()) mut.mutate(); }}
+          disabled={mut.isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
         >
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -318,6 +336,17 @@ function EditModal({ product, onClose, showRevenue, onSuccess }: { product: Prod
     product_owner_id: product.product_owner_id ?? "",
   });
   const [err, setErr] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const nameErr = V.chain(V.required, V.minLen(2, "Product name"))(form.name ?? "");
+    if (nameErr) errs.name = nameErr;
+    const codeErr = V.chain(V.required, V.minLen(2, "Product code"))(form.product_code ?? "");
+    if (codeErr) errs.product_code = codeErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const mut = useMutation({
     mutationFn: () => api.update(product.id, {
@@ -330,12 +359,12 @@ function EditModal({ product, onClose, showRevenue, onSuccess }: { product: Prod
 
   return (
     <Modal title={`Edit — ${product.name}`} onClose={onClose} wide>
-      <ProductForm form={form} setForm={setForm} showRevenue={showRevenue} />
+      <ProductForm form={form} setForm={setForm} showRevenue={showRevenue} fe={fe} onClearFe={k => setFe(p => ({ ...p, [k]: "" }))} />
       {err && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
         <button
-          onClick={() => mut.mutate()} disabled={mut.isPending}
+          onClick={() => { if (validate()) mut.mutate(); }} disabled={mut.isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
         >
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -676,52 +705,48 @@ export default function ProductsPage() {
                             </button>
                           )}
                         </div>
-                      </td>
+                                   </td>
                     </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">
-              {catFilter !== "all" || statusFilter !== "all" || dSearch
-                ? "No products match your filters."
-                : "No products yet. Add your first product."}
-            </div>
-          )}
+                  );
+                })}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="py-16 text-center text-gray-400 text-sm">
+                {dSearch || catFilter !== "all" || statusFilter !== "all"
+                  ? "No products match your filters."
+                  : "No products yet. Add one to get started."}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modals + Toast */}
       <AnimatePresence>
-        {showAdd && (
-          <AddModal
-            key="add-product-modal"
-            onClose={() => setShowAdd(false)}
-            showRevenue={showRevenue}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
-        {editProd && (
-          <EditModal
-            key={`edit-product-${editProd.id}`}
-            product={editProd}
-            onClose={() => setEditProd(null)}
-            showRevenue={showRevenue}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
-        {delProd && (
-          <DeleteModal
-            key={`delete-product-${delProd.id}`}
-            product={delProd}
-            onClose={() => setDelProd(null)}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
+        {showAdd    && <AddModal    onClose={() => setShowAdd(false)}  showRevenue={showRevenue} onSuccess={showToast} />}
+        {editProd   && <EditModal   product={editProd}           onClose={() => setEditProd(null)}   showRevenue={showRevenue} onSuccess={showToast} />}
+        {delProd    && <DeleteModal product={delProd}            onClose={() => setDelProd(null)}    onSuccess={showToast} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {toast && (
-          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className={cn(
+              "fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium",
+              toast.type === "success"
+                ? "bg-white border border-gray-100 text-gray-800"
+                : "bg-red-50 border border-red-100 text-red-700"
+            )}
+          >
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              : <AlertCircle  className="w-4 h-4 text-red-500 shrink-0" />}
+            {toast.msg}
+            <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

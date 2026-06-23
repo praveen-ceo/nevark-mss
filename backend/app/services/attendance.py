@@ -15,27 +15,110 @@ from app.models.employee import Attendance, Employee, LeaveRequest
 from app.models.enums import AttendanceStatus, LeaveStatus, LeaveType
 from app.schemas.attendance import (
     AttendanceCreate,
+    AttendanceResponse,
     AttendanceUpdate,
     LeaveRequestCreate,
+    LeaveRequestResponse,
     MonthlyReport,
     MonthlyReportRow,
 )
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Query helpers — always eager-load relationships
 # ---------------------------------------------------------------------------
 
 def _att_q():
+    """Base Attendance query with employee pre-loaded (avoids lazy-load)."""
     return select(Attendance).options(selectinload(Attendance.employee))
 
 
 def _leave_q():
+    """Base LeaveRequest query with employee + approver pre-loaded."""
     return select(LeaveRequest).options(
         selectinload(LeaveRequest.employee),
         selectinload(LeaveRequest.approver),
     )
 
+
+# ---------------------------------------------------------------------------
+# Schema builder helpers — safe, no lazy loading
+# Called only after selectinload has already populated the relationships.
+# ---------------------------------------------------------------------------
+
+def _build_att_resp(rec: Attendance) -> AttendanceResponse:
+    """Construct AttendanceResponse from an eagerly-loaded Attendance object."""
+    emp = getattr(rec, "employee", None)
+    name: Optional[str] = None
+    if emp is not None:
+        name = f"{emp.first_name} {emp.last_name}".strip() or None
+    return AttendanceResponse(
+        id=rec.id,
+        employee_id=rec.employee_id,
+        employee_name=name,
+        date=rec.date,
+        check_in=rec.check_in,
+        check_out=rec.check_out,
+        status=rec.status,
+        work_hours=rec.work_hours,
+        notes=rec.notes,
+        created_at=rec.created_at,
+    )
+
+
+def _build_leave_resp(rec: LeaveRequest) -> LeaveRequestResponse:
+    """Construct LeaveRequestResponse from an eagerly-loaded LeaveRequest object."""
+    emp = getattr(rec, "employee", None)
+    apv = getattr(rec, "approver", None)
+    emp_name: Optional[str] = None
+    apv_name: Optional[str] = None
+    if emp is not None:
+        emp_name = f"{emp.first_name} {emp.last_name}".strip() or None
+    if apv is not None:
+        apv_name = f"{apv.first_name} {apv.last_name}".strip() or None
+    return LeaveRequestResponse(
+        id=rec.id,
+        employee_id=rec.employee_id,
+        employee_name=emp_name,
+        approved_by=rec.approved_by,
+        approver_name=apv_name,
+        leave_type=rec.leave_type,
+        start_date=rec.start_date,
+        end_date=rec.end_date,
+        days=rec.days,
+        reason=rec.reason,
+        status=rec.status,
+        rejection_reason=rec.rejection_reason,
+        created_at=rec.created_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal re-fetch helpers — re-query after commit to get loaded record
+# ---------------------------------------------------------------------------
+
+async def _fetch_att(db: AsyncSession, att_id: uuid.UUID) -> Attendance:
+    """Re-fetch a single Attendance row with employee selectinloaded."""
+    return await db.scalar(_att_q().where(Attendance.id == att_id))
+
+
+async def _fetch_leave_orm(db: AsyncSession, leave_id: uuid.UUID) -> LeaveRequest:
+    """Re-fetch a LeaveRequest with employee + approver selectinloaded."""
+    result = await db.execute(
+        _leave_q().where(
+            LeaveRequest.id == leave_id,
+            LeaveRequest.is_active.is_(True),
+        )
+    )
+    leave = result.scalar_one_or_none()
+    if leave is None:
+        raise ValueError("Leave request not found.")
+    return leave
+
+
+# ---------------------------------------------------------------------------
+# Domain helpers
+# ---------------------------------------------------------------------------
 
 def _status_from_checkin(dt: datetime) -> AttendanceStatus:
     local = dt.astimezone()
@@ -60,15 +143,15 @@ async def _emp_id_for_user(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
         return emp_id
 
     # No employee row — auto-create one (handles superadmin / pre-existing users).
-    # Import here to avoid circular import at module load time.
+
     from app.models.auth import User as _User
     from app.models.enums import EmploymentType as _EmpType
 
     user = await db.scalar(select(_User).where(_User.id == user_id))
     if user is None:
         raise ValueError("User not found.")
-
-    # Generate unique employee code
+    
+    
     code: str = ""
     year = date.today().year
     for _ in range(20):
@@ -97,11 +180,12 @@ async def _emp_id_for_user(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
         hire_date=date.today(),
     )
     db.add(emp)
-    await db.flush()  # get emp.id; committed by the calling function
+    await db.flush()
     return emp.id
 
 
 async def _today_record(db: AsyncSession, emp_id: uuid.UUID) -> Optional[Attendance]:
+    """Fetch today's Attendance scalar (no relationship needed for mutations)."""
     return await db.scalar(
         select(Attendance).where(
             Attendance.employee_id == emp_id,
@@ -117,7 +201,7 @@ async def _today_record(db: AsyncSession, emp_id: uuid.UUID) -> Optional[Attenda
 
 async def check_in(
     db: AsyncSession, user_id: uuid.UUID, notes: Optional[str] = None
-) -> Attendance:
+) -> AttendanceResponse:
     emp_id = await _emp_id_for_user(db, user_id)
     now = datetime.now(timezone.utc)
     record = await _today_record(db, emp_id)
@@ -137,14 +221,16 @@ async def check_in(
             notes=notes,
         )
         db.add(record)
+    await db.flush()
+    att_id = record.id
     await db.commit()
-    await db.refresh(record)
-    return record
+    loaded = await _fetch_att(db, att_id)
+    return _build_att_resp(loaded)
 
 
 async def check_out(
     db: AsyncSession, user_id: uuid.UUID, notes: Optional[str] = None
-) -> Attendance:
+) -> AttendanceResponse:
     emp_id = await _emp_id_for_user(db, user_id)
     now = datetime.now(timezone.utc)
     record = await _today_record(db, emp_id)
@@ -158,14 +244,26 @@ async def check_out(
     record.work_hours = _hours(record.check_in, now)
     if notes:
         record.notes = notes
+    att_id = record.id
     await db.commit()
-    await db.refresh(record)
-    return record
+    loaded = await _fetch_att(db, att_id)
+    return _build_att_resp(loaded)
 
 
-async def get_today(db: AsyncSession, user_id: uuid.UUID) -> Optional[Attendance]:
+async def get_today(
+    db: AsyncSession, user_id: uuid.UUID
+) -> Optional[AttendanceResponse]:
     emp_id = await _emp_id_for_user(db, user_id)
-    return await _today_record(db, emp_id)
+    record = await db.scalar(
+        _att_q().where(
+            Attendance.employee_id == emp_id,
+            Attendance.date == date.today(),
+            Attendance.is_active.is_(True),
+        )
+    )
+    if record is None:
+        return None
+    return _build_att_resp(record)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +279,7 @@ async def list_attendance(
     status: Optional[AttendanceStatus] = None,
     skip: int = 0,
     limit: int = 200,
-) -> List[Attendance]:
+) -> List[AttendanceResponse]:
     q = _att_q().where(Attendance.is_active.is_(True))
     if employee_id:
         q = q.where(Attendance.employee_id == employee_id)
@@ -193,10 +291,12 @@ async def list_attendance(
         q = q.where(Attendance.status == status)
     q = q.order_by(Attendance.date.desc()).offset(skip).limit(limit)
     result = await db.execute(q)
-    return list(result.scalars().all())
+    return [_build_att_resp(r) for r in result.scalars().all()]
 
 
-async def create_attendance(db: AsyncSession, data: AttendanceCreate) -> Attendance:
+async def create_attendance(
+    db: AsyncSession, data: AttendanceCreate
+) -> AttendanceResponse:
     existing = await db.scalar(
         select(Attendance).where(
             Attendance.employee_id == data.employee_id,
@@ -208,17 +308,20 @@ async def create_attendance(db: AsyncSession, data: AttendanceCreate) -> Attenda
         raise ValueError(f"Attendance record already exists for {data.date}.")
     rec = Attendance(**data.model_dump())
     db.add(rec)
+    await db.flush()
+    att_id = rec.id
     await db.commit()
-    await db.refresh(rec)
-    return rec
+    loaded = await _fetch_att(db, att_id)
+    return _build_att_resp(loaded)
 
 
 async def update_attendance(
     db: AsyncSession, record_id: uuid.UUID, data: AttendanceUpdate
-) -> Attendance:
+) -> AttendanceResponse:
     rec = await db.scalar(
         select(Attendance).where(
-            Attendance.id == record_id, Attendance.is_active.is_(True)
+            Attendance.id == record_id,
+            Attendance.is_active.is_(True),
         )
     )
     if rec is None:
@@ -228,12 +331,12 @@ async def update_attendance(
     if rec.check_in and rec.check_out:
         rec.work_hours = _hours(rec.check_in, rec.check_out)
     await db.commit()
-    await db.refresh(rec)
-    return rec
+    loaded = await _fetch_att(db, record_id)
+    return _build_att_resp(loaded)
 
 
 # ---------------------------------------------------------------------------
-# Monthly report
+# Monthly report — explicit JOIN + aggregate, no ORM relationship needed
 # ---------------------------------------------------------------------------
 
 async def monthly_report(
@@ -299,7 +402,7 @@ async def monthly_report(
 
 async def create_leave(
     db: AsyncSession, user_id: uuid.UUID, data: LeaveRequestCreate
-) -> LeaveRequest:
+) -> LeaveRequestResponse:
     emp_id = await _emp_id_for_user(db, user_id)
     leave = LeaveRequest(
         employee_id=emp_id,
@@ -311,9 +414,11 @@ async def create_leave(
         status=LeaveStatus.PENDING,
     )
     db.add(leave)
+    await db.flush()
+    leave_id = leave.id
     await db.commit()
-    await db.refresh(leave)
-    return leave
+    loaded = await _fetch_leave_orm(db, leave_id)
+    return _build_leave_resp(loaded)
 
 
 async def list_leave(
@@ -324,7 +429,7 @@ async def list_leave(
     leave_type: Optional[LeaveType] = None,
     skip: int = 0,
     limit: int = 100,
-) -> List[LeaveRequest]:
+) -> List[LeaveRequestResponse]:
     q = _leave_q().where(LeaveRequest.is_active.is_(True))
     if employee_id:
         q = q.where(LeaveRequest.employee_id == employee_id)
@@ -334,33 +439,28 @@ async def list_leave(
         q = q.where(LeaveRequest.leave_type == leave_type)
     q = q.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(q)
-    return list(result.scalars().all())
+    return [_build_leave_resp(r) for r in result.scalars().all()]
 
 
-async def get_leave(db: AsyncSession, leave_id: uuid.UUID) -> LeaveRequest:
-    result = await db.execute(
-        _leave_q().where(
-            LeaveRequest.id == leave_id, LeaveRequest.is_active.is_(True)
-        )
-    )
-    leave = result.scalar_one_or_none()
-    if leave is None:
-        raise ValueError("Leave request not found.")
-    return leave
+async def get_leave(
+    db: AsyncSession, leave_id: uuid.UUID
+) -> LeaveRequestResponse:
+    leave = await _fetch_leave_orm(db, leave_id)
+    return _build_leave_resp(leave)
 
 
 async def approve_leave(
     db: AsyncSession, leave_id: uuid.UUID, approver_user_id: uuid.UUID
-) -> LeaveRequest:
-    leave = await get_leave(db, leave_id)
+) -> LeaveRequestResponse:
+    leave = await _fetch_leave_orm(db, leave_id)
     if leave.status != LeaveStatus.PENDING:
-        raise ValueError(f"Cannot approve — status is {leave.status.value}.")
+        raise ValueError(f"Cannot approve -- status is {leave.status.value}.")
     approver_emp_id = await _emp_id_for_user(db, approver_user_id)
     leave.status = LeaveStatus.APPROVED
     leave.approved_by = approver_emp_id
     await db.commit()
-    await db.refresh(leave)
-    return leave
+    loaded = await _fetch_leave_orm(db, leave_id)
+    return _build_leave_resp(loaded)
 
 
 async def reject_leave(
@@ -368,29 +468,29 @@ async def reject_leave(
     leave_id: uuid.UUID,
     approver_user_id: uuid.UUID,
     rejection_reason: str,
-) -> LeaveRequest:
-    leave = await get_leave(db, leave_id)
+) -> LeaveRequestResponse:
+    leave = await _fetch_leave_orm(db, leave_id)
     if leave.status != LeaveStatus.PENDING:
-        raise ValueError(f"Cannot reject — status is {leave.status.value}.")
+        raise ValueError(f"Cannot reject -- status is {leave.status.value}.")
     approver_emp_id = await _emp_id_for_user(db, approver_user_id)
     leave.status = LeaveStatus.REJECTED
     leave.approved_by = approver_emp_id
     leave.rejection_reason = rejection_reason
     await db.commit()
-    await db.refresh(leave)
-    return leave
+    loaded = await _fetch_leave_orm(db, leave_id)
+    return _build_leave_resp(loaded)
 
 
 async def cancel_leave(
     db: AsyncSession, leave_id: uuid.UUID, user_id: uuid.UUID
-) -> LeaveRequest:
+) -> LeaveRequestResponse:
     emp_id = await _emp_id_for_user(db, user_id)
-    leave = await get_leave(db, leave_id)
+    leave = await _fetch_leave_orm(db, leave_id)
     if leave.employee_id != emp_id:
         raise ValueError("You can only cancel your own leave requests.")
     if leave.status != LeaveStatus.PENDING:
-        raise ValueError(f"Cannot cancel — status is {leave.status.value}.")
+        raise ValueError(f"Cannot cancel -- status is {leave.status.value}.")
     leave.status = LeaveStatus.CANCELLED
     await db.commit()
-    await db.refresh(leave)
-    return leave
+    loaded = await _fetch_leave_orm(db, leave_id)
+    return _build_leave_resp(loaded)

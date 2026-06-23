@@ -12,6 +12,7 @@ from app.api.v1.routes.projects import router as projects_router
 from app.api.v1.routes.tasks import router as tasks_router
 from app.api.v1.routes.products import router as products_router
 from app.api.v1.routes.ai import router as ai_router
+from app.api.v1.routes.users import router as users_router
 
 router = APIRouter()
 
@@ -27,3 +28,4 @@ router.include_router(analytics_router,     prefix="/analytics",     tags=["anal
 router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 router.include_router(products_router,      prefix="/products",      tags=["products"])
 router.include_router(ai_router,            prefix="/ai",            tags=["AI Assistant"])
+router.include_router(users_router,         prefix="/users",         tags=["users"])

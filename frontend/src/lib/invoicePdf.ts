@@ -389,7 +389,6 @@ export async function downloadInvoicePdf(
       fontStyle: "bold",
       fontSize: 7.5,
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
-      colSpan: 2,
     },
     bodyStyles: {
       fontSize: 8,

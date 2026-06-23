@@ -64,8 +64,8 @@ interface DashboardAnalytics {
 // Helpers
 // ---------------------------------------------------------------------------
 function fmtINR(n: number): string {
-  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(1)}Cr`;
-  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(1)}L`;
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)}Cr`;
+  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)}L`;
   if (n >= 1_000)       return `₹${(n / 1_000).toFixed(0)}K`;
   return `₹${n.toFixed(0)}`;
 }
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                     style={{ opacity: n.is_read ? 0.75 : 1 }}
                   >
                     <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: bg }}
                     >
                       <Icon className="w-3.5 h-3.5" style={{ color }} />
@@ -301,7 +301,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     {!n.is_read && (
-                      <span className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ background: "#8B5CF6" }} />
+                      <span className="w-2 h-2 rounded-full shrink-0 mt-2" style={{ background: "#8B5CF6" }} />
                     )}
                   </div>
                 );

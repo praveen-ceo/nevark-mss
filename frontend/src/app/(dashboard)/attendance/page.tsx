@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AlertCircle, Calendar, Check, CheckCircle2, Clock, Download,
+  AlertCircle, Calendar, Check, CheckCircle2, ChevronDown, Clock, Download,
   Loader2, LogIn, LogOut, Plus, RefreshCw, X, XCircle,
 } from "lucide-react";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
+import { V } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
@@ -347,11 +348,19 @@ function LeaveRequestsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
 
   const EMPTY = { leave_type: "annual", start_date: "", end_date: "", reason: "" };
   const [form, setForm] = useState({ ...EMPTY });
+  const [leaveErr, setLeaveErr] = useState("");
   const muSubmit = useMutation({
     mutationFn: () => api.submitLeave(form),
-    onSuccess: () => { inv(); setShowModal(false); setForm({ ...EMPTY }); setErr(""); },
+    onSuccess: () => { inv(); setShowModal(false); setForm({ ...EMPTY }); setErr(""); setLeaveErr(""); },
     onError: (e: unknown) => setErr((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? "Submit failed"),
   });
+
+  function validateLeave(): boolean {
+    const dateErr = V.dateOrder(form.start_date, form.end_date);
+    if (dateErr) { setLeaveErr(dateErr); return false; }
+    setLeaveErr("");
+    return true;
+  }
 
   return (
     <div className="space-y-4">
@@ -454,11 +463,11 @@ function LeaveRequestsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                   <textarea value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} rows={3}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" placeholder="Reason for leave..." />
                 </div>
-                {err && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{err}</p>}
+                {(err || leaveErr) && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{err || leaveErr}</p>}
               </div>
               <div className="flex gap-2 mt-4">
-                <button onClick={() => { setShowModal(false); setErr(""); }} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={() => muSubmit.mutate()} disabled={muSubmit.isPending || !form.start_date || !form.end_date}
+                <button onClick={() => { setShowModal(false); setErr(""); setLeaveErr(""); }} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => { if (validateLeave()) muSubmit.mutate(); }} disabled={muSubmit.isPending || !form.start_date || !form.end_date}
                   className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {muSubmit.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Submit
                 </button>
@@ -519,6 +528,15 @@ function MonthlyReportTab() {
 
   const exportHeaders = ["Code","Employee","Present","Absent","Late","Half Day","On Leave","Total Hours"];
   const exportRows = rows.map(r => [r.employee_code, r.employee_name, r.present, r.absent, r.late, r.half_day, r.on_leave, r.total_hours]);
+
+  const [exportOpen, setExportOpen] = useState(false);
+  async function handleExport(fmt: "csv" | "xlsx" | "pdf") {
+    setExportOpen(false);
+    const fname = `nevark-attendance-${year}-${String(month).padStart(2,"0")}`;
+    if (fmt === "csv")  exportCSV(fname, exportHeaders, exportRows);
+    if (fmt === "xlsx") await exportXLSX(fname, exportHeaders, exportRows);
+    if (fmt === "pdf")  await exportPDF(fname, "Nevark MSS — Monthly Attendance", exportHeaders, exportRows);
+  }
 
   return (
     <div className="space-y-4">
@@ -595,14 +613,48 @@ function MonthlyReportTab() {
                   <td className="px-4 py-2.5 text-amber-600">{r.late}</td>
                   <td className="px-4 py-2.5 text-blue-600">{r.half_day}</td>
                   <td className="px-4 py-2.5 text-purple-600">{r.on_leave}</td>
-                  <td className="px-4 py-2.5 text-gray-700 font-medium">{r.total_hours}h</td>
+                  <td className="px-4 py-2.5 text-gray-500 font-mono">{parseFloat(r.total_hours || "0").toFixed(1)}h</td>
                 </tr>
               ))}
-              {!isLoading && !rows.length && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No data for {MONTHS[month-1]} {year}</td></tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {rows.length === 0 && !isLoading && (
+          <div className="py-12 text-center text-gray-400 text-sm">
+            No attendance data for {MONTHS[month - 1]} {year}.
+          </div>
+        )}
+        {isLoading && (
+          <div className="py-12 flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          </div>
+        )}
+      </div>
+
+      {/* Export */}
+      <div className="flex justify-end">
+        <div className="relative">
+          <button
+            onClick={() => setExportOpen(v => !v)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+          >
+            <Download className="w-4 h-4" />Export Report
+            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+          {exportOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+              <div className="absolute right-0 bottom-full mb-1 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                {(["xlsx", "csv", "pdf"] as const).map(fmt => (
+                  <button key={fmt} onClick={() => handleExport(fmt)}
+                    className="w-full px-4 py-2.5 text-sm text-left text-gray-700 hover:bg-gray-50 transition uppercase font-medium tracking-wide">
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

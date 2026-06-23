@@ -9,6 +9,7 @@ import {
   Loader2, Pencil, Plus, Search, Trash2, Users, X,
 } from "lucide-react";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
+import { V, ERR_CLS, EMAIL_RE, PHONE_RE } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
@@ -170,9 +171,26 @@ function AddModal({ onClose, departments, onSuccess }: {
   const qc = useQueryClient();
   const [form, setForm] = useState<EmployeeCreate>(EMPTY_CREATE);
   const [err, setErr] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const set = (k: keyof EmployeeCreate) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }));
+      if (fe[k]) setFe(p => ({ ...p, [k]: "" }));
+    };
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const emailErr = V.chain(V.required, V.email)(form.email);
+    if (emailErr) errs.email = emailErr;
+    const fnErr = V.chain(V.required, V.minLen(2, "First name"))(form.first_name);
+    if (fnErr) errs.first_name = fnErr;
+    const lnErr = V.chain(V.required, V.minLen(2, "Last name"))(form.last_name);
+    if (lnErr) errs.last_name = lnErr;
+    const phoneErr = V.phone(form.phone);
+    if (phoneErr) errs.phone = phoneErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const mut = useMutation({
     mutationFn: () => api.create(form),
@@ -184,13 +202,22 @@ function AddModal({ onClose, departments, onSuccess }: {
     <Modal title="Add New Employee" onClose={onClose}>
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2"><p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100">Account</p></div>
-        <Field label="Email" required><input type="email" value={form.email} onChange={set("email")} placeholder="name@company.com" className={inputCls} /></Field>
+        <Field label="Email" required>
+          <input type="email" value={form.email} onChange={set("email")} placeholder="name@company.com" className={inputCls} />
+          {fe.email && <span className={ERR_CLS}>{fe.email}</span>}
+        </Field>
         <Field label="Display Name" required><input value={form.full_name} onChange={set("full_name")} placeholder="Full name" className={inputCls} /></Field>
         <Field label="Password"><input type="password" value={form.password} onChange={set("password")} className={inputCls} /></Field>
         <div />
         <div className="col-span-2"><p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100 pt-2">Details</p></div>
-        <Field label="First Name" required><input value={form.first_name} onChange={set("first_name")} placeholder="First name" className={inputCls} /></Field>
-        <Field label="Last Name" required><input value={form.last_name} onChange={set("last_name")} placeholder="Last name" className={inputCls} /></Field>
+        <Field label="First Name" required>
+          <input value={form.first_name} onChange={set("first_name")} placeholder="First name" className={inputCls} />
+          {fe.first_name && <span className={ERR_CLS}>{fe.first_name}</span>}
+        </Field>
+        <Field label="Last Name" required>
+          <input value={form.last_name} onChange={set("last_name")} placeholder="Last name" className={inputCls} />
+          {fe.last_name && <span className={ERR_CLS}>{fe.last_name}</span>}
+        </Field>
         <Field label="Job Title"><input value={form.job_title} onChange={set("job_title")} placeholder="e.g. Senior Engineer" className={inputCls} /></Field>
         <Field label="Department">
           <select value={form.department_id} onChange={set("department_id")} className={inputCls}>
@@ -204,7 +231,10 @@ function AddModal({ onClose, departments, onSuccess }: {
           </select>
         </Field>
         <Field label="Hire Date" required><input type="date" value={form.hire_date} onChange={set("hire_date")} className={inputCls} /></Field>
-        <Field label="Phone"><input value={form.phone} onChange={set("phone")} placeholder="+91 98765 43210" className={inputCls} /></Field>
+        <Field label="Phone">
+          <input value={form.phone} onChange={set("phone")} placeholder="9876543210" className={inputCls} />
+          {fe.phone && <span className={ERR_CLS}>{fe.phone}</span>}
+        </Field>
         <Field label="Salary (annual)"><input type="number" value={form.salary} onChange={set("salary")} placeholder="850000" className={inputCls} /></Field>
         <Field label="Role" required>
           <select value={form.role} onChange={set("role")} className={inputCls}>
@@ -217,8 +247,8 @@ function AddModal({ onClose, departments, onSuccess }: {
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
         <button
-          onClick={() => mut.mutate()}
-          disabled={mut.isPending || !form.email || !form.first_name || !form.last_name}
+          onClick={() => { if (validate()) mut.mutate(); }}
+          disabled={mut.isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
         >
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -245,9 +275,24 @@ function EditModal({ emp, onClose, departments, onSuccess }: {
     phone: emp.phone ?? "", salary: emp.salary ?? null, is_active: emp.is_active,
   });
   const [err, setErr] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const setF = (k: keyof EmployeeUpdate) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }));
+      if (fe[k as string]) setFe(p => ({ ...p, [k as string]: "" }));
+    };
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const fnErr = V.chain(V.required, V.minLen(2, "First name"))(String(form.first_name ?? ""));
+    if (fnErr) errs.first_name = fnErr;
+    const lnErr = V.chain(V.required, V.minLen(2, "Last name"))(String(form.last_name ?? ""));
+    if (lnErr) errs.last_name = lnErr;
+    const phoneErr = V.phone(String(form.phone ?? ""));
+    if (phoneErr) errs.phone = phoneErr;
+    setFe(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const mut = useMutation({
     mutationFn: () => api.update(emp.id, {
@@ -264,8 +309,14 @@ function EditModal({ emp, onClose, departments, onSuccess }: {
       <div className="grid grid-cols-2 gap-4">
         <Field label="Display Name"><input value={String(form.full_name ?? "")} onChange={setF("full_name")} className={inputCls} /></Field>
         <Field label="Job Title"><input value={String(form.job_title ?? "")} onChange={setF("job_title")} className={inputCls} /></Field>
-        <Field label="First Name"><input value={String(form.first_name ?? "")} onChange={setF("first_name")} className={inputCls} /></Field>
-        <Field label="Last Name"><input value={String(form.last_name ?? "")} onChange={setF("last_name")} className={inputCls} /></Field>
+        <Field label="First Name">
+          <input value={String(form.first_name ?? "")} onChange={setF("first_name")} className={inputCls} />
+          {fe.first_name && <span className={ERR_CLS}>{fe.first_name}</span>}
+        </Field>
+        <Field label="Last Name">
+          <input value={String(form.last_name ?? "")} onChange={setF("last_name")} className={inputCls} />
+          {fe.last_name && <span className={ERR_CLS}>{fe.last_name}</span>}
+        </Field>
         <Field label="Department">
           <select value={String(form.department_id ?? "")} onChange={setF("department_id")} className={inputCls}>
             <option value="">No department</option>
@@ -278,7 +329,10 @@ function EditModal({ emp, onClose, departments, onSuccess }: {
           </select>
         </Field>
         <Field label="Hire Date"><input type="date" value={String(form.hire_date ?? "")} onChange={setF("hire_date")} className={inputCls} /></Field>
-        <Field label="Phone"><input value={String(form.phone ?? "")} onChange={setF("phone")} className={inputCls} /></Field>
+        <Field label="Phone">
+          <input value={String(form.phone ?? "")} onChange={setF("phone")} className={inputCls} />
+          {fe.phone && <span className={ERR_CLS}>{fe.phone}</span>}
+        </Field>
         <Field label="Salary">
           <input type="number"
             value={form.salary !== null && form.salary !== undefined ? String(form.salary) : ""}
@@ -299,7 +353,7 @@ function EditModal({ emp, onClose, departments, onSuccess }: {
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
         <button
-          onClick={() => mut.mutate()} disabled={mut.isPending}
+          onClick={() => { if (validate()) mut.mutate(); }} disabled={mut.isPending}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition"
         >
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -590,7 +644,7 @@ export default function EmployeesPage() {
                           <button
                             onClick={() => setEditEmp(emp)}
                             className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition"
-                            title="Edit"
+                                                      title="Edit"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -612,42 +666,36 @@ export default function EmployeesPage() {
               <div className="py-16 text-center text-gray-400 text-sm">
                 {dSearch || deptF !== "All" || statusF !== "All"
                   ? "No employees match your filters."
-                  : "No employees yet. Add your first employee."}
+                  : "No employees yet."}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Modals + Toast */}
+      {showAdd  && <AddModal    onClose={() => setShowAdd(false)}   departments={departments} onSuccess={m => showToast(m)} />}
+      {editEmp  && <EditModal   emp={editEmp}  onClose={() => setEditEmp(null)}  departments={departments} onSuccess={m => showToast(m)} />}
+      {delEmp   && <DeleteModal emp={delEmp}   onClose={() => setDelEmp(null)}   onSuccess={m => showToast(m)} />}
+
       <AnimatePresence>
-        {showAdd && (
-          <AddModal
-            key="add-employee-modal"
-            onClose={() => setShowAdd(false)}
-            departments={departments}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
-        {editEmp && (
-          <EditModal
-            key={`edit-employee-${editEmp.id}`}
-            emp={editEmp}
-            onClose={() => setEditEmp(null)}
-            departments={departments}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
-        {delEmp && (
-          <DeleteModal
-            key={`delete-employee-${delEmp.id}`}
-            emp={delEmp}
-            onClose={() => setDelEmp(null)}
-            onSuccess={(msg) => showToast(msg)}
-          />
-        )}
         {toast && (
-          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className={cn(
+              "fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium",
+              toast.type === "success"
+                ? "bg-white border border-gray-100 text-gray-800"
+                : "bg-red-50 border border-red-100 text-red-700"
+            )}
+          >
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              : <AlertCircle  className="w-4 h-4 text-red-500 shrink-0" />}
+            {toast.msg}
+            <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

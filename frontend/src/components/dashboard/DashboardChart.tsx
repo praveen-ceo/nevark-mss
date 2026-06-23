@@ -122,7 +122,7 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
           <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
           <YAxis tickFormatter={fmtK} tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={60} />
           <Tooltip
-            formatter={(v: number | string | readonly (string | number)[]) => [fmtK(Number(v)), ""]}
+            formatter={(v) => [fmtK(Number(v ?? 0)), ""]}
             contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 13 }}
           />
           <Area type="monotone" dataKey="revenue"  stroke="#3b82f6" strokeWidth={2} fill="url(#gR)" />

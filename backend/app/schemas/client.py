@@ -1,7 +1,8 @@
+import re
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class ContactBrief(BaseModel):
@@ -27,6 +28,22 @@ class ClientCreate(BaseModel):
     tax_id: Optional[str] = None
     notes: Optional[str] = None
 
+    @field_validator("tax_id")
+    @classmethod
+    def validate_gst(cls, v):
+        if v and not re.fullmatch(
+            r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{3}$",
+            v.upper()
+        ):
+            raise ValueError("Invalid GSTIN")
+        return v.upper()
+    
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        if v and not re.fullmatch(r"^[6-9]\d{9}$", v):
+         raise ValueError("Invalid phone number")
+        return v
 
 class ClientUpdate(BaseModel):
     name: Optional[str] = None
@@ -40,6 +57,23 @@ class ClientUpdate(BaseModel):
     tax_id: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator("tax_id")
+    @classmethod
+    def validate_gst(cls, v):
+        if v and not re.fullmatch(
+            r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{3}$",
+            v.upper()
+        ):
+            raise ValueError("Invalid GSTIN")
+        return v.upper()
+    
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        if v and not re.fullmatch(r"^[6-9]\d{9}$", v):
+         raise ValueError("Invalid phone number")
+        return v
 
 
 class ClientResponse(BaseModel):

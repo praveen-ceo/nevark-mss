@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AxiosError } from "axios";
@@ -91,12 +91,12 @@ interface ProjectFinanceSummary {
 // API
 // ---------------------------------------------------------------------------
 
-const STATUSES = ["draft","sent","partial","paid","overdue","cancelled"] as const;
-type InvoiceStatus = typeof STATUSES[number];
+type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "cancelled";
+type FinanceTab = InvoiceStatus | "all" | "project_finance";
 
 const api = {
   dashboard:       () => apiClient.get<FinanceDashboard>("/finance/dashboard").then(r => r.data),
-  invoices:        (status: string, search: string) =>
+  invoices:        (status: InvoiceStatus | "all", search: string) =>
     apiClient.get<Invoice[]>("/finance/invoices", {
       params: { ...(status && status !== "all" ? { status } : {}), ...(search ? { search } : {}) },
     }).then(r => r.data),
@@ -119,26 +119,33 @@ const api = {
 // ---------------------------------------------------------------------------
 
 const STATUS_CONFIG: Record<string, { label: string; style: string; dot: string }> = {
-  draft:     { label: "Draft",     style: "bg-gray-800/60 text-gray-300",     dot: "bg-gray-500"     },
-  sent:      { label: "Sent",      style: "bg-blue-900/40 text-blue-300",     dot: "bg-blue-400"     },
-  partial:   { label: "Partial",   style: "bg-amber-900/40 text-amber-300",   dot: "bg-amber-400"    },
-  paid:      { label: "Paid",      style: "bg-emerald-900/40 text-emerald-300", dot: "bg-emerald-400" },
-  overdue:   { label: "Overdue",   style: "bg-red-900/40 text-red-300",       dot: "bg-red-400"      },
-  cancelled: { label: "Cancelled", style: "bg-slate-800/60 text-slate-400",   dot: "bg-slate-500"    },
+  draft:     { label: "Draft",     style: "bg-gray-800/60 text-gray-300",       dot: "bg-gray-500"     },
+  sent:      { label: "Sent",      style: "bg-blue-900/40 text-blue-300",       dot: "bg-blue-400"     },
+  partial:   { label: "Partial",   style: "bg-amber-900/40 text-amber-300",     dot: "bg-amber-400"    },
+  paid:      { label: "Paid",      style: "bg-emerald-900/40 text-emerald-300", dot: "bg-emerald-400"  },
+  overdue:   { label: "Overdue",   style: "bg-red-900/40 text-red-300",         dot: "bg-red-400"      },
+  cancelled: { label: "Cancelled", style: "bg-slate-800/60 text-slate-400",     dot: "bg-slate-500"    },
 };
 
-const TAB_LIST = [
-  { key: "all",      label: "All"       },
-  { key: "draft",    label: "Draft"     },
-  { key: "sent",     label: "Sent"      },
-  { key: "partial",  label: "Partial"   },
-  { key: "paid",     label: "Paid"      },
-  { key: "overdue",  label: "Overdue"   },
+const TAB_LIST: Array<{ key: FinanceTab; label: string }> = [
+  { key: "all",             label: "All"             },
+  { key: "draft",           label: "Draft"           },
+  { key: "sent",            label: "Sent"            },
+  { key: "partial",         label: "Partial"         },
+  { key: "paid",            label: "Paid"            },
+  { key: "overdue",         label: "Overdue"         },
   { key: "cancelled",       label: "Cancelled"       },
   { key: "project_finance", label: "Project Finance" },
 ];
 
 const inputCls = "premium-input w-full text-sm px-3 py-2.5 outline-none transition";
+const PAGE_SIZE = 25;
+
+const PF_HEADERS = [
+  "Project", "Code", "Client", "Value (Rs.)", "Invoiced (Rs.)",
+  "Received (Rs.)", "Pending (Rs.)", "GST (Rs.)", "Expenses (Rs.)",
+  "Est. Profit (Rs.)", "Invoices", "Payments",
+];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,34 +158,47 @@ function fmt(n: number | null | undefined, currency = "INR"): string {
 
 function fmtShort(n: number | null | undefined): string {
   if (n == null) return "—";
-  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(1)}Cr`;
-  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 1000)        return `₹${(n / 1000).toFixed(0)}K`;
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)}Cr`;
+  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)}L`;
+  if (n >= 1000)        return `₹${(n / 1000).toFixed(2)}K`;
   return `₹${n}`;
+}
+
+// ---------------------------------------------------------------------------
+// useDebounce hook
+// ---------------------------------------------------------------------------
+
+function useDebounce<T>(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
 }
 
 // ---------------------------------------------------------------------------
 // Toast
 // ---------------------------------------------------------------------------
 
-function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
+const Toast = memo(function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-      className={cn("fixed bottom-6 right-6 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-white text-sm font-medium",
+      className={cn("fixed bottom-6 right-6 z-100 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-white text-sm font-medium",
         type === "success" ? "bg-emerald-600" : "bg-red-600")}>
-      {type === "success" ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+      {type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
       {msg}
       <button onClick={onClose} className="ml-1 opacity-75 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
     </motion.div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Modal shell
 // ---------------------------------------------------------------------------
 
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+const Modal = memo(function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -206,7 +226,7 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
       </motion.div>
     </div>
   );
-}
+});
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -223,7 +243,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
 // Auto-Invoice Modal
 // ---------------------------------------------------------------------------
 
-function AutoInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m: string) => void }) {
+const AutoInvoiceModal = memo(function AutoInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m: string) => void }) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -234,7 +254,10 @@ function AutoInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucce
     staleTime: 30_000,
   });
 
-  const completed = projects.filter(p => p.status === "completed" && p.client && p.budget);
+  const completed = useMemo(
+    () => projects.filter(p => p.status === "completed" && p.client && p.budget),
+    [projects]
+  );
 
   const mut = useMutation({
     mutationFn: () => api.autoInvoice(selectedId),
@@ -276,13 +299,13 @@ function AutoInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucce
       </div>
     </Modal>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Send Invoice Modal
 // ---------------------------------------------------------------------------
 
-function SendModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose: () => void; onSuccess: (m: string) => void }) {
+const SendModal = memo(function SendModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose: () => void; onSuccess: (m: string) => void }) {
   const qc = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
   const mut = useMutation({
@@ -321,7 +344,7 @@ function SendModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose:
       </div>
     </Modal>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Record Payment Modal
@@ -329,12 +352,12 @@ function SendModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose:
 
 const PAYMENT_METHODS = ["bank_transfer", "credit_card", "cash", "cheque", "online"] as const;
 
-function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose: () => void; onSuccess: (m: string) => void }) {
+const PaymentModal = memo(function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose: () => void; onSuccess: (m: string) => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({ amount: "", payment_date: new Date().toISOString().slice(0, 10), payment_method: "bank_transfer", reference: "" });
   const [err, setErr] = useState<string | null>(null);
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = useCallback((k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value })), []);
   const outstanding = invoice.outstanding_amount ?? (invoice.total_amount - invoice.paid_amount);
 
   const mut = useMutation({
@@ -383,19 +406,19 @@ function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClo
       </div>
     </Modal>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Invoice Detail Modal
 // ---------------------------------------------------------------------------
 
-function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
+const InvoiceDetailModal = memo(function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
   invoice: Invoice; onClose: () => void; onSend: () => void; onPay: () => void;
 }) {
   const { data: settings } = useQuery({ queryKey: ["finance-settings"], queryFn: api.settings, staleTime: 300_000 });
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  async function handleDownloadPdf() {
+  const handleDownloadPdf = useCallback(async () => {
     setPdfLoading(true);
     try {
       const { downloadInvoicePdf } = await import("@/lib/invoicePdf");
@@ -417,7 +440,7 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
     } finally {
       setPdfLoading(false);
     }
-  }
+  }, [invoice, settings]);
 
   const cfg = STATUS_CONFIG[invoice.status] ?? STATUS_CONFIG.draft;
   const outstanding = invoice.outstanding_amount ?? (invoice.total_amount - invoice.paid_amount);
@@ -426,7 +449,6 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
   return (
     <Modal title={`Invoice — ${invoice.invoice_number}`} onClose={onClose} wide>
       <div className="space-y-5">
-        {/* Header row */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-lg font-bold" style={{ color: "#E5E7EB" }}>{invoice.client?.name ?? "—"}</p>
@@ -438,7 +460,6 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
           </span>
         </div>
 
-        {/* Dates */}
         <div className="grid grid-cols-3 gap-3">
           {[["Issued", invoice.issue_date], ["Due", invoice.due_date], ["Place of Supply", invoice.place_of_supply ?? "—"]].map(([l, v]) => (
             <div key={l} className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -448,7 +469,6 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
           ))}
         </div>
 
-        {/* Items */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#6B7280" }}>Line Items</p>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
@@ -472,7 +492,6 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
           </div>
         </div>
 
-        {/* Totals */}
         <div className="rounded-xl p-4 space-y-2 text-sm" style={{ background: "rgba(255,255,255,0.04)" }}>
           <div className="flex justify-between"><span style={{ color: "#9CA3AF" }}>Subtotal</span><span className="font-medium" style={{ color: "#E5E7EB" }}>{fmt(invoice.subtotal, invoice.currency)}</span></div>
           {invoice.discount_amount > 0 && <div className="flex justify-between" style={{ color: "#f87171" }}><span>Discount</span><span>-{fmt(invoice.discount_amount, invoice.currency)}</span></div>}
@@ -491,7 +510,6 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
           <div className="flex justify-between font-semibold" style={{ color: "#60a5fa" }}><span>Outstanding</span><span>{fmt(outstanding, invoice.currency)}</span></div>
         </div>
 
-        {/* Payments history */}
         {invoice.payments.length > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#6B7280" }}>Payments Received</p>
@@ -506,11 +524,9 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           {invoice.status === "draft" && (
-            <button onClick={onSend}
-              className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
+            <button onClick={onSend} className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
               <SendHorizonal className="w-4 h-4" />Send Invoice
             </button>
           )}
@@ -521,11 +537,8 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
               <CreditCard className="w-4 h-4" />Record Payment
             </button>
           )}
-          <button
-            onClick={handleDownloadPdf}
-            disabled={pdfLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
-          >
+          <button onClick={handleDownloadPdf} disabled={pdfLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed" style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}>
             {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {pdfLoading ? "Generating…" : "Download PDF"}
           </button>
@@ -534,13 +547,13 @@ function InvoiceDetailModal({ invoice, onClose, onSend, onPay }: {
       </div>
     </Modal>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
-// Settings Panel
+// Settings Modal
 // ---------------------------------------------------------------------------
 
-function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m: string) => void }) {
+const SettingsModal = memo(function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m: string) => void }) {
   const qc = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["finance-settings"], queryFn: api.settings });
   const [form, setForm] = useState<Record<string, string>>({});
@@ -581,37 +594,30 @@ function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     onError: (e: AxiosError<{ detail: string }>) => setErr(e.response?.data?.detail ?? "Failed to save"),
   });
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = useCallback((k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value })), []);
 
   const sections: Array<{ title: string; fields: Array<{ key: string; label: string; placeholder?: string }> }> = [
-    {
-      title: "Company", fields: [
+    { title: "Company", fields: [
         { key: "company_name", label: "Company Name", placeholder: "Nevark Solutions Pvt Ltd" },
         { key: "company_gstin", label: "Company GSTIN", placeholder: "33XXXXX0000X1Z5" },
         { key: "state_code", label: "State Code (for GST)", placeholder: "33" },
-      ],
-    },
-    {
-      title: "GST Rates", fields: [
+    ]},
+    { title: "GST Rates", fields: [
         { key: "cgst_rate", label: "CGST Rate (%)", placeholder: "9" },
         { key: "sgst_rate", label: "SGST Rate (%)", placeholder: "9" },
         { key: "igst_rate", label: "IGST Rate (%)", placeholder: "18" },
-      ],
-    },
-    {
-      title: "Bank Details", fields: [
+    ]},
+    { title: "Bank Details", fields: [
         { key: "bank_name", label: "Bank Name" },
         { key: "bank_account", label: "Account Number" },
         { key: "bank_ifsc", label: "IFSC Code" },
-      ],
-    },
-    {
-      title: "Invoice Settings", fields: [
+    ]},
+    { title: "Invoice Settings", fields: [
         { key: "invoice_prefix", label: "Invoice Prefix", placeholder: "NVK" },
         { key: "default_sac", label: "Default SAC Code", placeholder: "998314" },
         { key: "payment_terms", label: "Payment Terms (days)", placeholder: "30" },
-      ],
-    },
+    ]},
   ];
 
   return (
@@ -641,61 +647,308 @@ function SettingsModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
       </div>
     </Modal>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
-// Project Finance Section (skeuo-styled, lazy-loaded when tab === "project_finance")
+// KPI Section — memoized, only re-renders when dashboard data changes
 // ---------------------------------------------------------------------------
 
-function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummary[]; isLoading: boolean }) {
+const KPISection = memo(function KPISection({ dashboard }: { dashboard: FinanceDashboard | undefined }) {
+  return (
+    <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+      <KpiCard label="Revenue Collected" value={fmtShort(dashboard?.revenue_collected)} icon={BadgeDollarSign} color="emerald" index={0} />
+      <KpiCard label="Expenses"          value={fmtShort(dashboard?.total_expenses)}    icon={TrendingDown}    color="red"     index={1} />
+      <KpiCard label="Net Profit"        value={fmtShort(dashboard?.net_profit)}        icon={TrendingUp}      color="blue"    index={2} />
+      <KpiCard label="Pending"           value={fmtShort(dashboard?.pending_amount)}    icon={CreditCard}      color="orange"  index={3}
+        subtitle={dashboard ? `${dashboard.sent_count} invoices` : undefined} />
+      <KpiCard label="Overdue"           value={fmtShort(dashboard?.overdue_amount)}    icon={Wallet}          color="red"     index={4}
+        subtitle={dashboard ? `${dashboard.overdue_count} invoices` : undefined} />
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Finance Charts — memoized, only re-renders when dashboard changes
+// ---------------------------------------------------------------------------
+
+const FinanceCharts = memo(function FinanceCharts({
+  dashboard,
+  setTab,
+}: {
+  dashboard: FinanceDashboard | undefined;
+  setTab: (t: FinanceTab) => void;
+}) {
+  const chartData = useMemo(() => dashboard ? [
+    { name: "Draft",   count: dashboard.draft_count   },
+    { name: "Sent",    count: dashboard.sent_count    },
+    { name: "Paid",    count: dashboard.paid_count    },
+    { name: "Overdue", count: dashboard.overdue_count },
+  ] : [], [dashboard]);
+
+  const summaryItems = useMemo(() => [
+    { label: "Collected", value: dashboard?.revenue_collected, color: "#34d399" },
+    { label: "Expenses",  value: dashboard?.total_expenses,    color: "#f87171" },
+    { label: "Net",       value: dashboard?.net_profit,        color: "#60a5fa" },
+  ], [dashboard]);
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      {/* Invoice summary grid */}
+      <div className="premium-card p-5">
+        <h3 className="font-semibold mb-4" style={{ color: "#E5E7EB" }}>Invoice Summary</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {(["draft","sent","paid","overdue"] as const).map(s => {
+            const cfg = STATUS_CONFIG[s];
+            const count = s === "draft" ? dashboard?.draft_count
+              : s === "sent" ? dashboard?.sent_count
+              : s === "paid" ? dashboard?.paid_count
+              : dashboard?.overdue_count;
+            return (
+              <button key={s} onClick={() => setTab(s)}
+                className={cn("rounded-xl p-3.5 text-left transition hover:opacity-90", cfg.style)}>
+                <p className="text-xs font-bold uppercase tracking-wide">{cfg.label}</p>
+                <p className="text-2xl font-bold mt-1">{count ?? "—"}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Recharts bar */}
+      <div className="xl:col-span-2 premium-card p-5">
+        <div className="mb-4">
+          <h3 className="font-semibold" style={{ color: "#E5E7EB" }}>Revenue vs Expenses</h3>
+          <p className="text-xs" style={{ color: "#6B7280" }}>Live aggregates (monthly breakdown in V2)</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-2">
+          {summaryItems.map(item => (
+            <div key={item.label} className="rounded-xl p-4 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <p className="text-xs mb-1" style={{ color: "#6B7280" }}>{item.label}</p>
+              <p className="text-lg font-bold" style={{ color: item.color }}>{fmtShort(item.value)}</p>
+            </div>
+          ))}
+        </div>
+        {dashboard && (
+          <div className="mt-4">
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(192,192,192,0.15)", fontSize: 12, background: "#1a2234", color: "#E5E7EB" }} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#7C3AED" label={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Invoice Table — memoized with pagination
+// ---------------------------------------------------------------------------
+
+const InvoiceTable = memo(function InvoiceTable({
+  invoices,
+  isLoading,
+  isError,
+  dSearch,
+  tab,
+  onDetail,
+  onSend,
+  onPay,
+}: {
+  invoices: Invoice[];
+  isLoading: boolean;
+  isError: boolean;
+  dSearch: string;
+  tab: FinanceTab;
+  onDetail: (inv: Invoice) => void;
+  onSend: (inv: Invoice) => void;
+  onPay: (inv: Invoice) => void;
+}) {
+  const [page, setPage] = useState(0);
+
+  // Reset to first page when invoices change (tab/search switched)
+  useEffect(() => { setPage(0); }, [invoices]);
+
+  const totalPages = Math.ceil(invoices.length / PAGE_SIZE);
+  const pageSlice  = useMemo(
+    () => invoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [invoices, page]
+  );
+
+  if (isError) {
+    return (
+      <div className="p-6 flex items-center gap-3" style={{ color: "#f87171" }}>
+        <AlertCircle className="w-5 h-5" />
+        <p className="text-sm">Failed to load invoices. Check backend is running.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            {["Invoice", "Client", "Project", "Items", "Subtotal", "GST", "Total", "Outstanding", "Status", "Due", ""].map(h => (
+              <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color: "#C0C0C0" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pageSlice.map((inv, i) => {
+            const cfg = STATUS_CONFIG[inv.status] ?? STATUS_CONFIG.draft;
+            const outstanding = inv.outstanding_amount ?? (inv.total_amount - inv.paid_amount);
+            return (
+              <motion.tr key={inv.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors cursor-pointer hover:bg-[rgba(124,58,237,0.07)]"
+                onClick={() => onDetail(inv)}>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(124,58,237,0.15)" }}>
+                      <FileText className="w-4 h-4" style={{ color: "#8B5CF6" }} />
+                    </div>
+                    <span className="font-mono text-sm font-semibold" style={{ color: "#E5E7EB" }}>{inv.invoice_number}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3.5 font-medium whitespace-nowrap" style={{ color: "#C0C0C0" }}>{inv.client?.name ?? "—"}</td>
+                <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>{inv.project?.code ?? "—"}</td>
+                <td className="px-4 py-3.5" style={{ color: "#9CA3AF" }}>{inv.items.length}</td>
+                <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#C0C0C0" }}>{fmt(inv.subtotal, inv.currency)}</td>
+                <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>
+                  {inv.supply_type === "intrastate"
+                    ? `C+S ${inv.cgst_rate}%+${inv.sgst_rate}%`
+                    : inv.igst_rate ? `IGST ${inv.igst_rate}%` : "—"}
+                </td>
+                <td className="px-4 py-3.5 font-bold whitespace-nowrap" style={{ color: "#E5E7EB" }}>{fmt(inv.total_amount, inv.currency)}</td>
+                <td className="px-4 py-3.5 whitespace-nowrap">
+                  <span style={{ fontWeight: 600, color: outstanding > 0 ? "#fb923c" : "#6B7280" }}>
+                    {fmt(outstanding, inv.currency)}
+                  </span>
+                </td>
+                <td className="px-4 py-3.5">
+                  <span className={cn("text-xs px-2 py-1 rounded-full font-semibold flex items-center gap-1 w-fit", cfg.style)}>
+                    <span className={cn("w-1.5 h-1.5 rounded-full", cfg.dot)} />{cfg.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3.5 text-xs whitespace-nowrap">
+                  <span style={{ color: inv.status === "overdue" ? "#f87171" : "#9CA3AF", fontWeight: inv.status === "overdue" ? 600 : 400 }}>{inv.due_date}</span>
+                </td>
+                <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-2">
+                    {inv.status === "draft" && (
+                      <button onClick={() => onSend(inv)}
+                        className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#8B5CF6" }}>
+                        <SendHorizonal className="w-3 h-3" />Send
+                      </button>
+                    )}
+                    {["sent", "partial", "overdue"].includes(inv.status) && (
+                      <button onClick={() => onPay(inv)}
+                        className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#34d399" }}>
+                        <CreditCard className="w-3 h-3" />Pay
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </motion.tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {!isLoading && invoices.length === 0 && (
+        <div className="py-16 text-center text-sm" style={{ color: "#6B7280" }}>
+          {dSearch || tab !== "all" ? "No invoices match your filters." : "No invoices yet. Generate one from a completed project."}
+        </div>
+      )}
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <span className="text-xs" style={{ color: "#6B7280" }}>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, invoices.length)} of {invoices.length}
+          </span>
+          <div className="flex gap-1.5">
+            <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+              className="text-xs px-3 py-1.5 rounded-lg transition disabled:opacity-30"
+              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}>
+              ← Prev
+            </button>
+            <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+              className="text-xs px-3 py-1.5 rounded-lg transition disabled:opacity-30"
+              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}>
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Project Finance Section — memoized with debounced search + memoized calcs
+// ---------------------------------------------------------------------------
+
+const ProjectFinanceSection = memo(function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummary[]; isLoading: boolean }) {
   const [pfSearch, setPfSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
+  const dPfSearch = useDebounce(pfSearch, 300);
 
-  const filtered = pfSearch
-    ? data.filter(p =>
-        p.project_name.toLowerCase().includes(pfSearch.toLowerCase()) ||
-        p.project_code.toLowerCase().includes(pfSearch.toLowerCase()) ||
-        (p.client_name ?? "").toLowerCase().includes(pfSearch.toLowerCase())
-      )
-    : data;
+  const filtered = useMemo(() => {
+    if (!dPfSearch) return data;
+    const q = dPfSearch.toLowerCase();
+    return data.filter(p =>
+      p.project_name.toLowerCase().includes(q) ||
+      p.project_code.toLowerCase().includes(q) ||
+      (p.client_name ?? "").toLowerCase().includes(q)
+    );
+  }, [data, dPfSearch]);
 
-  const totalValue    = data.reduce((s, p) => s + (p.project_value ?? 0), 0);
-  const totalInvoiced = data.reduce((s, p) => s + p.total_invoiced, 0);
-  const totalReceived = data.reduce((s, p) => s + p.total_received, 0);
-  const totalPending  = data.reduce((s, p) => s + p.pending_amount, 0);
-  const totalExpenses = data.reduce((s, p) => s + p.expenses, 0);
-  const totalProfit   = data.reduce((s, p) => s + p.estimated_profit, 0);
+  const totals = useMemo(() => ({
+    value:    data.reduce((s, p) => s + (p.project_value ?? 0), 0),
+    invoiced: data.reduce((s, p) => s + p.total_invoiced, 0),
+    received: data.reduce((s, p) => s + p.total_received, 0),
+    pending:  data.reduce((s, p) => s + p.pending_amount, 0),
+    expenses: data.reduce((s, p) => s + p.expenses, 0),
+    profit:   data.reduce((s, p) => s + p.estimated_profit, 0),
+  }), [data]);
 
-  const PF_HEADERS = [
-    "Project", "Code", "Client", "Value (Rs.)", "Invoiced (Rs.)",
-    "Received (Rs.)", "Pending (Rs.)", "GST (Rs.)", "Expenses (Rs.)",
-    "Est. Profit (Rs.)", "Invoices", "Payments",
-  ];
-  const pfRows = () => filtered.map(p => [
+  const kpiItems = useMemo(() => [
+    { label: "Project Value",  value: totals.value,    styleColor: "#60a5fa",  styleBg: "rgba(59,130,246,0.1)"  },
+    { label: "Total Invoiced", value: totals.invoiced, styleColor: "#a78bfa",  styleBg: "rgba(139,92,246,0.1)"  },
+    { label: "Received",       value: totals.received, styleColor: "#34d399",  styleBg: "rgba(16,185,129,0.1)"  },
+    { label: "Pending",        value: totals.pending,  styleColor: "#fb923c",  styleBg: "rgba(251,146,60,0.1)"  },
+    { label: "Expenses",       value: totals.expenses, styleColor: "#f87171",  styleBg: "rgba(239,68,68,0.1)"   },
+    {
+      label: "Est. Profit", value: totals.profit,
+      styleColor: totals.profit >= 0 ? "#34d399" : "#f87171",
+      styleBg:    totals.profit >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+    },
+  ], [totals]);
+
+  const pfRows = useMemo(() => filtered.map(p => [
     p.project_name, p.project_code, p.client_name ?? "—",
     p.project_value ?? 0, p.total_invoiced, p.total_received,
     p.pending_amount, p.gst_amount, p.expenses, p.estimated_profit,
     p.invoice_count, p.payment_count,
-  ]);
+  ]), [filtered]);
 
-  const KPI_ITEMS = [
-    { label: "Project Value",  value: totalValue,    styleColor: "#60a5fa",  styleBg: "rgba(59,130,246,0.1)"  },
-    { label: "Total Invoiced", value: totalInvoiced, styleColor: "#a78bfa",  styleBg: "rgba(139,92,246,0.1)" },
-    { label: "Received",       value: totalReceived, styleColor: "#34d399",  styleBg: "rgba(16,185,129,0.1)" },
-    { label: "Pending",        value: totalPending,  styleColor: "#fb923c",  styleBg: "rgba(251,146,60,0.1)" },
-    { label: "Expenses",       value: totalExpenses, styleColor: "#f87171",  styleBg: "rgba(239,68,68,0.1)"  },
-    {
-      label: "Est. Profit", value: totalProfit,
-      styleColor: totalProfit >= 0 ? "#34d399" : "#f87171",
-      styleBg: totalProfit >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-    },
-  ];
+  const handleExportCSV   = useCallback(() => { exportCSV("project-finance", PF_HEADERS, pfRows); setExportOpen(false); }, [pfRows]);
+  const handleExportXLSX  = useCallback(() => { exportXLSX("project-finance", PF_HEADERS, pfRows); setExportOpen(false); }, [pfRows]);
+  const handleExportPDF   = useCallback(() => { exportPDF("project-finance", "Project Finance", PF_HEADERS, pfRows); setExportOpen(false); }, [pfRows]);
+  const toggleExport      = useCallback(() => setExportOpen(x => !x), []);
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setPfSearch(e.target.value), []);
 
   return (
     <div className="p-4 space-y-4">
-      {/* KPI strip — skeuo-card applied to each */}
+      {/* KPI strip */}
       <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-        {KPI_ITEMS.map(kpi => (
+        {kpiItems.map(kpi => (
           <div key={kpi.label} className="skeuo-card p-4" style={{ background: kpi.styleBg }}>
             <p className="text-xs font-medium mb-1" style={{ color: "#9CA3AF" }}>{kpi.label}</p>
             <p className="text-lg font-bold" style={{ color: kpi.styleColor }}>{fmtShort(kpi.value)}</p>
@@ -703,39 +956,33 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
         ))}
       </div>
 
-      {/* Table — skeuo-surface wrapper */}
       <div className="skeuo-surface">
         {/* Toolbar */}
         <div className="p-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
           <div className="flex items-center gap-2 flex-1 rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(192,192,192,0.12)" }}>
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: "#6B7280" }} />
+            <Search className="w-4 h-4 shrink-0" style={{ color: "#6B7280" }} />
             <input
               value={pfSearch}
-              onChange={e => setPfSearch(e.target.value)}
+              onChange={handleSearchChange}
               placeholder="Search project or client..."
               className="bg-transparent text-sm outline-none flex-1"
               style={{ color: "#E5E7EB" }}
             />
           </div>
           <span className="text-xs whitespace-nowrap" style={{ color: "#6B7280" }}>{filtered.length} projects</span>
-          {/* Export dropdown */}
           <div className="relative">
-            <button
-              onClick={() => setExportOpen(x => !x)}
+            <button onClick={toggleExport}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl transition"
-              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}
-            >
+              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}>
               <Download className="w-3.5 h-3.5" />Export
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-10 rounded-xl shadow-lg z-20 py-1 min-w-[120px]" style={{ background: "#1a2234", border: "1px solid rgba(192,192,192,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                {([
-                  ["CSV",   () => { exportCSV("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
-                  ["Excel", () => { exportXLSX("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
-                  ["PDF",   () => { exportPDF("project-finance", PF_HEADERS, pfRows()); setExportOpen(false); }],
-                ] as [string, () => void][]).map(([label, fn]) => (
+              <div className="absolute right-0 top-10 rounded-xl shadow-lg z-20 py-1 min-w-30" style={{ background: "#1a2234", border: "1px solid rgba(192,192,192,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                {([["CSV", handleExportCSV], ["Excel", handleExportXLSX], ["PDF", handleExportPDF]] as [string, () => void][]).map(([label, fn]) => (
                   <button key={label} onClick={fn}
-                    className="w-full text-left px-3 py-2 text-xs transition" style={{ color: "#C0C0C0" }} onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                    className="w-full text-left px-3 py-2 text-xs transition" style={{ color: "#C0C0C0" }}
+                    onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")}
+                    onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     {label}
                   </button>
                 ))}
@@ -760,13 +1007,8 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
               </thead>
               <tbody>
                 {filtered.map((p, i) => (
-                  <motion.tr
-                    key={p.project_id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.03 }}
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors hover:bg-[rgba(124,58,237,0.07)]"
-                  >
+                  <motion.tr key={p.project_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors hover:bg-[rgba(124,58,237,0.07)]">
                     <td className="px-4 py-3.5">
                       <p className="font-semibold leading-tight" style={{ color: "#E5E7EB" }}>{p.project_name}</p>
                       <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{p.project_code}</p>
@@ -803,7 +1045,7 @@ function ProjectFinanceSection({ data, isLoading }: { data: ProjectFinanceSummar
       </div>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -817,18 +1059,13 @@ type ActiveModal =
   | { type: "settings" };
 
 export default function FinancePage() {
-  const [tab, setTab] = useState("all");
+  const [tab, setTab]     = useState<FinanceTab>("all");
   const [search, setSearch] = useState("");
-  const [dSearch, setDSearch] = useState("");
   const [modal, setModal] = useState<ActiveModal | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => setDSearch(search), 400);
-    return () => { if (debounce.current) clearTimeout(debounce.current); };
-  }, [search]);
+  // Debounced search — 300ms, replaces manual useRef+setTimeout
+  const dSearch = useDebounce(search, 300);
 
   const { data: dashboard } = useQuery({
     queryKey: ["finance-dashboard"],
@@ -838,7 +1075,7 @@ export default function FinancePage() {
 
   const { data: invoices = [], isLoading, isError } = useQuery({
     queryKey: ["invoices", tab, dSearch],
-    queryFn: () => api.invoices(tab, dSearch),
+    queryFn: () => api.invoices(tab === "project_finance" ? "all" : tab, dSearch),
     enabled: tab !== "project_finance",
   });
 
@@ -849,11 +1086,23 @@ export default function FinancePage() {
     staleTime: 60_000,
   });
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => setToast({ msg, type });
+  // Stable callbacks — prevent unnecessary re-renders in memoized children
+  const showToast    = useCallback((msg: string, type: "success" | "error" = "success") => setToast({ msg, type }), []);
+  const closeModal   = useCallback(() => setModal(null), []);
+  const openSettings = useCallback(() => setModal({ type: "settings" }), []);
+  const openAutoInv  = useCallback(() => setModal({ type: "auto-invoice" }), []);
+  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value), []);
+  const closeToast   = useCallback(() => setToast(null), []);
 
-  // Derive active invoice safely for sub-modals
-  const activeInvoice = modal && (modal.type === "send" || modal.type === "pay" || modal.type === "detail")
-    ? modal.invoice : null;
+  const openDetail = useCallback((inv: Invoice) => setModal({ type: "detail", invoice: inv }), []);
+  const openSend   = useCallback((inv: Invoice) => setModal({ type: "send",   invoice: inv }), []);
+  const openPay    = useCallback((inv: Invoice) => setModal({ type: "pay",    invoice: inv }), []);
+
+  // Derive active invoice for sub-modals — memoized to avoid object churn
+  const activeInvoice = useMemo(
+    () => modal && (modal.type === "send" || modal.type === "pay" || modal.type === "detail") ? modal.invoice : null,
+    [modal]
+  );
 
   return (
     <div className="space-y-6">
@@ -864,111 +1113,39 @@ export default function FinancePage() {
           <p className="text-sm" style={{ color: "#9CA3AF" }}>Invoices, GST, payments and financial performance</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setModal({ type: "settings" })}
+          <button onClick={openSettings}
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl transition"
             style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
             onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.05)")}
             onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
             <Settings className="w-4 h-4" />Settings
           </button>
-          <button onClick={() => setModal({ type: "auto-invoice" })}
-            className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
+          <button onClick={openAutoInv} className="flex items-center gap-2 px-4 py-2 text-sm premium-button-violet">
             <Plus className="w-4 h-4" />New Invoice
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
-        <KpiCard label="Revenue Collected" value={fmtShort(dashboard?.revenue_collected)} icon={BadgeDollarSign} color="emerald" index={0} />
-        <KpiCard label="Expenses"          value={fmtShort(dashboard?.total_expenses)}    icon={TrendingDown}    color="red"     index={1} />
-        <KpiCard label="Net Profit"        value={fmtShort(dashboard?.net_profit)}        icon={TrendingUp}      color="blue"    index={2} />
-        <KpiCard label="Pending"           value={fmtShort(dashboard?.pending_amount)}    icon={CreditCard}      color="orange"  index={3}
-          subtitle={dashboard ? `${dashboard.sent_count} invoices` : undefined} />
-        <KpiCard label="Overdue"           value={fmtShort(dashboard?.overdue_amount)}    icon={Wallet}          color="red"     index={4}
-          subtitle={dashboard ? `${dashboard.overdue_count} invoices` : undefined} />
-      </div>
+      <KPISection dashboard={dashboard} />
 
-      {/* Summary cards + chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        {/* Invoice summary grid */}
-        <div className="premium-card p-5">
-          <h3 className="font-semibold mb-4" style={{ color: "#E5E7EB" }}>Invoice Summary</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {(["draft","sent","paid","overdue"] as const).map(s => {
-              const cfg = STATUS_CONFIG[s];
-              const count = s === "draft" ? dashboard?.draft_count
-                : s === "sent" ? dashboard?.sent_count
-                : s === "paid" ? dashboard?.paid_count
-                : dashboard?.overdue_count;
-              return (
-                <button key={s} onClick={() => setTab(s)}
-                  className={cn("rounded-xl p-3.5 text-left transition hover:opacity-90", cfg.style)}>
-                  <p className="text-xs font-bold uppercase tracking-wide">{cfg.label}</p>
-                  <p className="text-2xl font-bold mt-1">{count ?? "—"}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Recharts bar — static placeholder since API has no monthly data endpoint */}
-        <div className="xl:col-span-2 premium-card p-5">
-          <div className="mb-4">
-            <h3 className="font-semibold" style={{ color: "#E5E7EB" }}>Revenue vs Expenses</h3>
-            <p className="text-xs" style={{ color: "#6B7280" }}>Live aggregates (monthly breakdown in V2)</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3 mt-2">
-            {[
-              { label: "Collected", value: dashboard?.revenue_collected, color: "#34d399" },
-              { label: "Expenses",  value: dashboard?.total_expenses,    color: "#f87171" },
-              { label: "Net",       value: dashboard?.net_profit,        color: "#60a5fa" },
-            ].map(item => (
-              <div key={item.label} className="rounded-xl p-4 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-                <p className="text-xs mb-1" style={{ color: "#6B7280" }}>{item.label}</p>
-                <p className="text-lg font-bold" style={{ color: item.color }}>{fmtShort(item.value)}</p>
-              </div>
-            ))}
-          </div>
-          {/* Mini bar for visual: draft / sent / paid / overdue counts */}
-          {dashboard && (
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={120}>
-                <BarChart data={[
-                  { name: "Draft",   count: dashboard.draft_count },
-                  { name: "Sent",    count: dashboard.sent_count  },
-                  { name: "Paid",    count: dashboard.paid_count  },
-                  { name: "Overdue", count: dashboard.overdue_count },
-                ]} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(192,192,192,0.15)", fontSize: 12, background: "#1a2234", color: "#E5E7EB" }} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}
-                    fill="#7C3AED"
-                    label={false}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Charts */}
+      <FinanceCharts dashboard={dashboard} setTab={setTab} />
 
       {/* Invoice table / Project Finance */}
       <div className="premium-surface">
         {/* Toolbar */}
         <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           {tab !== "project_finance" && (
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[200px] rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(192,192,192,0.12)" }}>
-              <Search className="w-4 h-4" style={{ color: "#6B7280" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by invoice number..."
-                className="bg-transparent text-sm outline-none flex-1" style={{ color: "#E5E7EB" }} />
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" style={{ color: "#8B5CF6" }} />}
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <div className="flex items-center gap-2 flex-1 min-w-50 rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(192,192,192,0.12)" }}>
+                <Search className="w-4 h-4" style={{ color: "#6B7280" }} />
+                <input value={search} onChange={handleSearch} placeholder="Search by invoice number..."
+                  className="bg-transparent text-sm outline-none flex-1" style={{ color: "#E5E7EB" }} />
+                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" style={{ color: "#8B5CF6" }} />}
+              </div>
+              <span className="text-xs" style={{ color: "#6B7280" }}>{invoices.length} invoices</span>
             </div>
-            <span className="text-xs" style={{ color: "#6B7280" }}>{invoices.length} invoices</span>
-          </div>
           )}
           <div className="flex gap-1.5 overflow-x-auto">
             {TAB_LIST.map(t => (
@@ -989,89 +1166,17 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {tab !== "project_finance" && isError && (
-          <div className="p-6 flex items-center gap-3" style={{ color: "#f87171" }}>
-            <AlertCircle className="w-5 h-5" />
-            <p className="text-sm">Failed to load invoices. Check backend is running.</p>
-          </div>
-        )}
-
         {tab !== "project_finance" && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                {["Invoice", "Client", "Project", "Items", "Subtotal", "GST", "Total", "Outstanding", "Status", "Due", ""].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color: "#C0C0C0" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv, i) => {
-                const cfg = STATUS_CONFIG[inv.status] ?? STATUS_CONFIG.draft;
-                const outstanding = inv.outstanding_amount ?? (inv.total_amount - inv.paid_amount);
-                return (
-                  <motion.tr key={inv.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} className="transition-colors cursor-pointer hover:bg-[rgba(124,58,237,0.07)]"
-                    onClick={() => setModal({ type: "detail", invoice: inv })}>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(124,58,237,0.15)" }}>
-                          <FileText className="w-4 h-4" style={{ color: "#8B5CF6" }} />
-                        </div>
-                        <span className="font-mono text-sm font-semibold" style={{ color: "#E5E7EB" }}>{inv.invoice_number}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 font-medium whitespace-nowrap" style={{ color: "#C0C0C0" }}>{inv.client?.name ?? "—"}</td>
-                    <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>{inv.project?.code ?? "—"}</td>
-                    <td className="px-4 py-3.5" style={{ color: "#9CA3AF" }}>{inv.items.length}</td>
-                    <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#C0C0C0" }}>{fmt(inv.subtotal, inv.currency)}</td>
-                    <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: "#9CA3AF" }}>
-                      {inv.supply_type === "intrastate"
-                        ? `C+S ${inv.cgst_rate}%+${inv.sgst_rate}%`
-                        : inv.igst_rate ? `IGST ${inv.igst_rate}%` : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 font-bold whitespace-nowrap" style={{ color: "#E5E7EB" }}>{fmt(inv.total_amount, inv.currency)}</td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span style={{ fontWeight: 600, color: outstanding > 0 ? "#fb923c" : "#6B7280" }}>
-                        {fmt(outstanding, inv.currency)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className={cn("text-xs px-2 py-1 rounded-full font-semibold flex items-center gap-1 w-fit", cfg.style)}>
-                        <span className={cn("w-1.5 h-1.5 rounded-full", cfg.dot)} />{cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-xs whitespace-nowrap">
-                      <span style={{ color: inv.status === "overdue" ? "#f87171" : "#9CA3AF", fontWeight: inv.status === "overdue" ? 600 : 400 }}>{inv.due_date}</span>
-                    </td>
-                    <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
-                        {inv.status === "draft" && (
-                          <button onClick={() => setModal({ type: "send", invoice: inv })}
-                            className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#8B5CF6" }}>
-                            <SendHorizonal className="w-3 h-3" />Send
-                          </button>
-                        )}
-                        {["sent", "partial", "overdue"].includes(inv.status) && (
-                          <button onClick={() => setModal({ type: "pay", invoice: inv })}
-                            className="text-xs font-medium whitespace-nowrap flex items-center gap-1" style={{ color: "#34d399" }}>
-                            <CreditCard className="w-3 h-3" />Pay
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!isLoading && invoices.length === 0 && (
-            <div className="py-16 text-center text-sm" style={{ color: "#6B7280" }}>
-              {dSearch || tab !== "all" ? "No invoices match your filters." : "No invoices yet. Generate one from a completed project."}
-            </div>
-          )}
-        </div>
+          <InvoiceTable
+            invoices={invoices}
+            isLoading={isLoading}
+            isError={isError}
+            dSearch={dSearch}
+            tab={tab}
+            onDetail={openDetail}
+            onSend={openSend}
+            onPay={openPay}
+          />
         )}
 
         {tab === "project_finance" && (
@@ -1082,25 +1187,25 @@ export default function FinancePage() {
       {/* Modals */}
       <AnimatePresence mode="wait">
         {modal?.type === "auto-invoice" && (
-          <AutoInvoiceModal key="auto-invoice" onClose={() => setModal(null)} onSuccess={showToast} />
+          <AutoInvoiceModal key="auto-invoice" onClose={closeModal} onSuccess={showToast} />
         )}
         {modal?.type === "settings" && (
-          <SettingsModal key="settings" onClose={() => setModal(null)} onSuccess={showToast} />
+          <SettingsModal key="settings" onClose={closeModal} onSuccess={showToast} />
         )}
         {modal?.type === "detail" && activeInvoice && (
           <InvoiceDetailModal key={`detail-${activeInvoice.id}`} invoice={activeInvoice}
-            onClose={() => setModal(null)}
+            onClose={closeModal}
             onSend={() => setModal({ type: "send", invoice: activeInvoice })}
             onPay={() => setModal({ type: "pay", invoice: activeInvoice })} />
         )}
         {modal?.type === "send" && activeInvoice && (
-          <SendModal key={`send-${activeInvoice.id}`} invoice={activeInvoice} onClose={() => setModal(null)} onSuccess={showToast} />
+          <SendModal key={`send-${activeInvoice.id}`} invoice={activeInvoice} onClose={closeModal} onSuccess={showToast} />
         )}
         {modal?.type === "pay" && activeInvoice && (
-          <PaymentModal key={`pay-${activeInvoice.id}`} invoice={activeInvoice} onClose={() => setModal(null)} onSuccess={showToast} />
+          <PaymentModal key={`pay-${activeInvoice.id}`} invoice={activeInvoice} onClose={closeModal} onSuccess={showToast} />
         )}
         {toast && (
-          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+          <Toast key="toast" msg={toast.msg} type={toast.type} onClose={closeToast} />
         )}
       </AnimatePresence>
     </div>

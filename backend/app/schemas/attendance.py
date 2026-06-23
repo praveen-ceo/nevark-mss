@@ -11,6 +11,7 @@ from app.models.enums import AttendanceStatus, LeaveStatus, LeaveType
 
 
 class EmployeeBrief(BaseModel):
+    """Kept for internal use — not used in HTTP response models."""
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     first_name: str
@@ -42,10 +43,11 @@ class AttendanceUpdate(BaseModel):
 
 
 class AttendanceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    """Flat response — no ORM relationship fields to avoid async lazy-load errors."""
+    model_config = ConfigDict(from_attributes=False)
     id: UUID
     employee_id: UUID
-    employee: Optional[EmployeeBrief] = None
+    employee_name: Optional[str] = None   # resolved by service, never lazy-loaded
     date: date
     check_in: Optional[datetime] = None
     check_out: Optional[datetime] = None
@@ -106,12 +108,13 @@ class LeaveRejectRequest(BaseModel):
 
 
 class LeaveRequestResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    """Flat response — no ORM relationship fields to avoid async lazy-load errors."""
+    model_config = ConfigDict(from_attributes=False)
     id: UUID
     employee_id: UUID
-    employee: Optional[EmployeeBrief] = None
+    employee_name: Optional[str] = None    # resolved by service, never lazy-loaded
     approved_by: Optional[UUID] = None
-    approver: Optional[EmployeeBrief] = None
+    approver_name: Optional[str] = None    # resolved by service, never lazy-loaded
     leave_type: LeaveType
     start_date: date
     end_date: date

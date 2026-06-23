@@ -3,15 +3,15 @@ from decimal import Decimal
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+import re
 
-from app.models.enums import (
-    ExpenseCategory,
-    ExpenseStatus,
-    InvoiceStatus,
-    PaymentMethod,
-    PaymentStatus,
-)
+from pydantic import BaseModel, field_validator, model_validator
+
+import app.models.enums
+
+_GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]{3}$")
+_PAN_RE   = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+_IFSC_RE  = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,41 @@ class FinanceSettingsUpdate(BaseModel):
     default_sac: Optional[str] = None
     payment_terms: Optional[int] = None
     default_currency: Optional[str] = None
+
+    @field_validator("company_gstin")
+    @classmethod
+    def validate_gstin(cls, v: Optional[str]) -> Optional[str]:
+        if v and not _GSTIN_RE.match(v.upper()):
+            raise ValueError("Invalid GSTIN — must be 15 characters (e.g. 27AAPFU0939F1ZV).")
+        return v.upper() if v else v
+
+    @field_validator("pan")
+    @classmethod
+    def validate_pan(cls, v: Optional[str]) -> Optional[str]:
+        if v and not _PAN_RE.match(v.upper()):
+            raise ValueError("Invalid PAN — must be 10 characters (e.g. ABCDE1234F).")
+        return v.upper() if v else v
+
+    @field_validator("bank_ifsc")
+    @classmethod
+    def validate_ifsc(cls, v: Optional[str]) -> Optional[str]:
+        if v and not _IFSC_RE.match(v.upper()):
+            raise ValueError("Invalid IFSC — must be 11 characters (e.g. HDFC0001234).")
+        return v.upper() if v else v
+
+    @field_validator("payment_terms")
+    @classmethod
+    def validate_payment_terms(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 0:
+            raise ValueError("Payment terms cannot be negative.")
+        return v
+
+    @field_validator("cgst_rate", "sgst_rate", "igst_rate")
+    @classmethod
+    def validate_gst_rates(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("GST rates cannot be negative.")
+        return v
 
 
 class FinanceSettingsResponse(BaseModel):
@@ -122,7 +157,7 @@ class InvoiceItemResponse(BaseModel):
 class PaymentCreate(BaseModel):
     amount: Decimal
     payment_date: date
-    payment_method: PaymentMethod
+    payment_method: app.models.enums.PaymentMethod
     reference: Optional[str] = None
     notes: Optional[str] = None
 
@@ -138,9 +173,9 @@ class PaymentResponse(BaseModel):
     id: UUID
     amount: Decimal
     payment_date: date
-    payment_method: PaymentMethod
+    payment_method: app.models.enums.PaymentMethod
     reference: Optional[str] = None
-    status: PaymentStatus
+    status: app.models.enums.PaymentStatus
     notes: Optional[str] = None
     model_config = {"from_attributes": True}
 
@@ -162,8 +197,28 @@ class InvoiceCreate(BaseModel):
     items: List[InvoiceItemCreate]
 
 
+    @model_validator(mode="after")
+    def validate_invoice(self):
+        if not self.items:
+            raise ValueError(
+                "Invoice must contain at least one item"
+            )
+
+        if self.due_date < self.issue_date:
+            raise ValueError(
+                "Due date cannot be before issue date"
+            )
+
+        if self.discount_amount < 0:
+            raise ValueError(
+                "Discount cannot be negative"
+            )
+
+        return self
+
+
 class InvoiceUpdate(BaseModel):
-    status: Optional[InvoiceStatus] = None
+    status: Optional[app.models.enums.InvoiceStatus] = None
     due_date: Optional[date] = None
     notes: Optional[str] = None
     place_of_supply: Optional[str] = None
@@ -175,7 +230,7 @@ class InvoiceUpdate(BaseModel):
 class InvoiceResponse(BaseModel):
     id: UUID
     invoice_number: str
-    status: InvoiceStatus
+    status: app.models.enums.InvoiceStatus
     issue_date: date
     due_date: date
     subtotal: Decimal
@@ -211,7 +266,7 @@ class InvoiceResponse(BaseModel):
 
 class ExpenseCreate(BaseModel):
     project_id: Optional[UUID] = None
-    category: ExpenseCategory
+    category: app.models.enums.ExpenseCategory
     amount: Decimal
     currency: str = "INR"
     date: date
@@ -226,22 +281,22 @@ class ExpenseCreate(BaseModel):
 
 
 class ExpenseUpdate(BaseModel):
-    category: Optional[ExpenseCategory] = None
+    category: Optional[app.models.enums.ExpenseCategory] = None
     amount: Optional[Decimal] = None
     currency: Optional[str] = None
-    date: Optional[date] = None 
+    date: Optional["date"] = None
     description: Optional[str] = None
 
 
 class ExpenseResponse(BaseModel):
     id: UUID
-    category: ExpenseCategory
+    category: app.models.enums.ExpenseCategory
     amount: Decimal
     currency: str
     date: date
     description: Optional[str] = None
     receipt_url: Optional[str] = None
-    status: ExpenseStatus
+    status: app.models.enums.ExpenseStatus
     rejection_reason: Optional[str] = None
     project: Optional[ProjectBrief] = None
     employee: Optional[EmployeeBrief] = None
