@@ -28,12 +28,10 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # MinIO
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = ""
-    MINIO_SECRET_KEY: str = ""
-    MINIO_BUCKET_NAME: str = "nevark-mss"
-    MINIO_SECURE: bool = False
+    # Supabase Storage
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    MINIO_BUCKET_NAME: str = "nevark-mss"  # storage bucket name
 
     # OpenAI
     OPENAI_API_KEY: str = ""
