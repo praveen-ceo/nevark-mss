@@ -1,3 +1,13 @@
+// ============================================================
+// Nevark Technologies Pvt. Ltd.
+// All rights reserved © 2026 Nevark Technologies.
+// Unauthorized use, reproduction, or distribution of this
+// code is strictly prohibited.
+// Module  : export.ts
+// Author  : Development Team
+// Created : 2026-09-05 15:08:00
+// ============================================================
+
 /**
  * Shared export utilities for XLSX, CSV, and PDF.
  * Requires: xlsx, jspdf, jspdf-autotable

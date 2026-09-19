@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : employee.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 from __future__ import annotations
 
 import uuid
@@ -19,7 +29,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
-from app.models.enums import AttendanceStatus, EmploymentType, LeaveStatus, LeaveType
+from app.models.enums import AttendanceStatus, DepartmentType, EmploymentType, LeaveStatus, LeaveType
 
 if TYPE_CHECKING:
     from app.models.auth import User
@@ -33,10 +43,19 @@ class Department(BaseModel):
         UniqueConstraint("name", name="uq_departments_name"),
         Index("ix_departments_parent_id", "parent_id"),
         Index("ix_departments_manager_id", "manager_id"),
+        Index("ix_departments_type", "department_type"),
     )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    department_type: Mapped[Optional[DepartmentType]] = mapped_column(
+        Enum(
+            DepartmentType,
+            name="department_type_enum",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        nullable=True,
+    )
     parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("departments.id", ondelete="SET NULL"),

@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : project.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 from __future__ import annotations
 
 import uuid
@@ -24,7 +34,7 @@ from app.models.enums import MilestoneStatus, Priority, ProjectStatus, TaskStatu
 if TYPE_CHECKING:
     from app.models.client import Client
     from app.models.contract import Contract
-    from app.models.employee import Employee
+    from app.models.employee import Department, Employee
     from app.models.finance import Expense, Invoice
 
 
@@ -35,11 +45,18 @@ class Project(BaseModel):
         Index("ix_projects_client_id", "client_id"),
         Index("ix_projects_status", "status"),
         Index("ix_projects_priority", "priority"),
+        Index("ix_projects_department_id", "department_id"),
     )
 
     client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("clients.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Organisational attribution — nullable; NULL means unattributed project
+    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("departments.id", ondelete="SET NULL"),
         nullable=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -71,6 +88,10 @@ class Project(BaseModel):
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
 
     client: Mapped[Optional[Client]] = relationship("Client", back_populates="projects")
+    # Organisational relationship (Enhancement 1) — nullable; existing projects have NULL
+    department: Mapped[Optional[Department]] = relationship(
+        "Department", foreign_keys=[department_id]
+    )
     tasks: Mapped[List[ProjectTask]] = relationship("ProjectTask", back_populates="project")
     assignments: Mapped[List[ProjectAssignment]] = relationship(
         "ProjectAssignment", back_populates="project"

@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : enums.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 import enum
 
 
@@ -188,3 +198,9 @@ class ProductStatus(str, enum.Enum):
     DISCONTINUED = "discontinued"
     UPCOMING     = "upcoming"
     BETA         = "beta"
+
+
+class DepartmentType(str, enum.Enum):
+    GROUP         = "group"
+    BUSINESS_UNIT = "business_unit"
+    DEPARTMENT    = "department"

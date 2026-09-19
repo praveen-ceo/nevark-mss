@@ -1,10 +1,29 @@
 "use client";
+// ============================================================
+// Nevark Technologies Pvt. Ltd.
+// All rights reserved © 2026 Nevark Technologies.
+// Unauthorized use, reproduction, or distribution of this
+// code is strictly prohibited.
+// Module  : page.tsx
+// Author  : Development Team
+// Created : 2026-09-05 15:08:00
+// ============================================================
 
+
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RevenueChart, ProjectStatusChart } from "@/components/dashboard/DashboardChart";
+import { ExpenseAnomalyList, type ExpenseAnomaly } from "@/components/dashboard/ExpenseAnomalyList";
+import { ProjectRiskList, type ProjectRisk } from "@/components/dashboard/ProjectRiskList";
+import { EmployeeProductivityList, type EmployeeProductivity } from "@/components/dashboard/EmployeeProductivityList";
+import { CashFlowChart, type CashFlowPoint } from "@/components/dashboard/CashFlowChart";
+import { ExecutiveSummaryPanel } from "@/components/dashboard/ExecutiveSummaryPanel";
 import { AIAssistantPanel } from "@/components/dashboard/AIAssistantPanel";
+import { AlertToast } from "@/components/dashboard/AlertToast";
+import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
+import { OrgFilterBar } from "@/components/dashboard/OrgFilterBar";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -27,14 +46,14 @@ import { apiClient } from "@/lib/api/client";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-interface StatusCount { status: string; count: number }
-interface EmploymentTypeCount { employment_type: string; count: number }
-interface MonthlyRevenue { month: string; revenue: number; expenses: number; profit: number }
-interface NotifItem { id: string; entity_type: string; title: string; is_read: boolean; created_at: string }
-interface DeadlineItem { project_id: string; name: string; client_name: string | null; end_date: string; days_left: number; status: string }
+export interface StatusCount { status: string; count: number }
+export interface EmploymentTypeCount { employment_type: string; count: number }
+export interface MonthlyRevenue { month: string; revenue: number; expenses: number; profit: number }
+export interface NotifItem { id: string; entity_type: string; title: string; is_read: boolean; created_at: string }
+export interface DeadlineItem { project_id: string; name: string; client_name: string | null; end_date: string; days_left: number; status: string }
 
-interface InvoiceStatusCount { status: string; count: number; total: number }
-interface FinanceDashboard {
+export interface InvoiceStatusCount { status: string; count: number; total: number }
+export interface FinanceDashboard {
   revenue_collected: number;
   pending_amount: number;
   overdue_amount: number;
@@ -43,11 +62,16 @@ interface FinanceDashboard {
   invoice_counts: InvoiceStatusCount[];
   draft_count: number; sent_count: number; paid_count: number; overdue_count: number;
 }
-interface TaskDashboard { total: number; completed: number; in_progress: number; overdue: number; todo: number; blocked: number }
+export interface TaskDashboard { total: number; completed: number; in_progress: number; overdue: number; todo: number; blocked: number }
 
-interface DashboardAnalytics {
+export interface DashboardAnalytics {
   finance: FinanceDashboard;
   monthly_revenue: MonthlyRevenue[];
+  cash_flow: CashFlowPoint[];
+  forecast_available: boolean;
+  expense_anomalies: ExpenseAnomaly[];
+  project_risks: ProjectRisk[];
+  employee_productivity: EmployeeProductivity[];
   total_projects: number;
   active_projects: number;
   overdue_projects: number;
@@ -58,6 +82,13 @@ interface DashboardAnalytics {
   employees_by_type: EmploymentTypeCount[];
   recent_activity: NotifItem[];
   upcoming_deadlines: DeadlineItem[];
+}
+
+export interface OrgFilter {
+  groupId: string | null;
+  businessUnitId: string | null;
+  startDate: string | null;
+  endDate: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,10 +145,30 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+  // Enhancement 1 — organisational filter state
+  const [orgFilter, setOrgFilter] = useState<OrgFilter>({ groupId: null, businessUnitId: null, startDate: null, endDate: null });
+
+  const handleFilterChange = useCallback((f: OrgFilter) => {
+    setOrgFilter(f);
+  }, []);
+
+  // Build query params for the analytics endpoint
+  const analyticsParams = new URLSearchParams();
+  if (orgFilter.groupId) analyticsParams.set("group_id", orgFilter.groupId);
+  if (orgFilter.businessUnitId) analyticsParams.set("business_unit_id", orgFilter.businessUnitId);
+  if (orgFilter.startDate) analyticsParams.set("start_date", orgFilter.startDate);
+  if (orgFilter.endDate) analyticsParams.set("end_date", orgFilter.endDate);
+  const analyticsQs = analyticsParams.toString();
+
   const { data, isLoading } = useQuery<DashboardAnalytics>({
-    queryKey: ["analytics-dashboard"],
-    queryFn: () => apiClient.get<DashboardAnalytics>("/analytics/dashboard").then((r) => r.data),
+    // queryKey includes filter values so React Query refetches on filter change
+    queryKey: ["analytics-dashboard", orgFilter.groupId, orgFilter.businessUnitId, orgFilter.startDate, orgFilter.endDate],
+    queryFn: () =>
+      apiClient
+        .get<DashboardAnalytics>(`/analytics/dashboard${analyticsQs ? `?${analyticsQs}` : ""}`)
+        .then((r) => r.data),
     staleTime: 60_000,
+    refetchInterval: 30_000, // E9: polling for real-time alerts
   });
 
   const { data: feedData, isLoading: feedLoading } = useQuery({
@@ -127,6 +178,8 @@ export default function DashboardPage() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
+
+  const { alerts, dismissAlert } = useRealtimeAlerts(data, orgFilter);
 
   const f = data?.finance;
   const KPIS = [
@@ -214,14 +267,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Enhancement 1 — Org Filter Bar */}
+      <OrgFilterBar onFilterChange={handleFilterChange} />
+
+      {/* Enhancement 8 — Executive Summary */}
+      <ExecutiveSummaryPanel data={data} loading={isLoading} />
+
+      {/* Enhancement 9 — Real-Time Alerts */}
+      <AlertToast alerts={alerts} onDismiss={dismissAlert} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
         {KPIS.map((k, i) => <KpiCard key={k.label} {...k} index={i} />)}
       </div>
 
       {/* Charts + Quick Actions */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div>
           <RevenueChart
             data={data?.monthly_revenue?.map((m) => ({
               month: m.month,
@@ -232,6 +294,16 @@ export default function DashboardPage() {
             loading={isLoading}
           />
         </div>
+        <div>
+          <CashFlowChart
+            data={data?.cash_flow}
+            forecastAvailable={data?.forecast_available}
+            loading={isLoading}
+          />
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mt-5">
         {/* Quick Actions */}
         <div className="premium-card p-5">
           <h3 style={{ fontWeight: 600, color: "#E5E7EB", marginBottom: "1rem" }}>Quick Actions</h3>
@@ -255,7 +327,7 @@ export default function DashboardPage() {
 
       {/* Activity + Deadlines */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        {/* Recent Activity */}
+        {/* Recent Activity — always global; see Enhancement 1 limitations */}
         <div className="xl:col-span-2 premium-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 style={{ fontWeight: 600, color: "#E5E7EB" }}>Recent Activity</h3>
@@ -337,16 +409,31 @@ export default function DashboardPage() {
                         <p className="text-xs" style={{ color: "#9CA3AF" }}>{d.client_name ?? "Internal"}</p>
                       </div>
                       <span
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
                         style={uStyle}
                       >
-                        {d.days_left === 0 ? "Today" : `${d.days_left}d`}
+                        {d.days_left === 0 ? "Today" : d.days_left < 0 ? "Overdue" : `${d.days_left}d`}
                       </span>
                     </div>
                   );
                 })}
               </div>
             )}
+          </div>
+          
+          {/* Enhancement 4: Expense Anomalies */}
+          <div className="h-[300px]">
+            <ExpenseAnomalyList data={data?.expense_anomalies} loading={isLoading} />
+          </div>
+
+          {/* Enhancement 5 & 6: Project Risks and Employee Productivity */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className="h-[300px] xl:col-span-2">
+              <ProjectRiskList data={data?.project_risks} loading={isLoading} />
+            </div>
+            <div className="h-[300px] xl:col-span-1">
+              <EmployeeProductivityList data={data?.employee_productivity} loading={isLoading} />
+            </div>
           </div>
 
           {/* Task Summary */}

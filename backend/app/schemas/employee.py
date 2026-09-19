@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : employee.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -10,9 +20,38 @@ from app.models.enums import EmploymentType
 
 
 class DepartmentBrief(BaseModel):
+    """Flat department representation — used in employee responses and dropdowns.
+
+    Backward compatible: existing consumers that use only id/name are unaffected.
+    The parent_id and department_type fields are new additions for Enhancement 1.
+    """
+
     id: UUID
     name: str
+    parent_id: Optional[UUID] = None
+    department_type: Optional[str] = None
     model_config = {"from_attributes": True}
+
+
+class DepartmentNode(BaseModel):
+    """Nested department node for the /employees/departments/tree endpoint.
+
+    Enhancement 1: used by the dashboard OrgFilterBar to build Group and
+    Business Unit selectors. Children are populated server-side from the
+    flat department list.
+    """
+
+    id: UUID
+    name: str
+    parent_id: Optional[UUID] = None
+    department_type: Optional[str] = None
+    children: list["DepartmentNode"] = []
+    model_config = {"from_attributes": True}
+
+
+DepartmentNode.model_rebuild()
+
+
 
 
 class UserBrief(BaseModel):
