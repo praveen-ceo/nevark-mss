@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : finance.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 from datetime import date
 from decimal import Decimal
 from typing import List, Literal, Optional
@@ -327,6 +337,31 @@ class FinanceDashboard(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Finance Trends
+# ---------------------------------------------------------------------------
+
+class MonthlyRevenue(BaseModel):
+    month: str          # e.g. "Jan 2025"
+    revenue: Decimal
+    expenses: Decimal
+    profit: Decimal
+
+
+class CashFlowPoint(BaseModel):
+    month: str
+    inflow: float
+    outflow: float
+    net_cash: float
+    is_forecast: bool
+
+
+class FinanceTrends(BaseModel):
+    monthly_revenue: List[MonthlyRevenue] = []
+    cash_flow: List[CashFlowPoint] = []
+    forecast_available: bool = True
+
+
+# ---------------------------------------------------------------------------
 # Project Finance Summary
 # ---------------------------------------------------------------------------
 
@@ -344,3 +379,38 @@ class ProjectFinanceSummary(BaseModel):
     estimated_profit: Decimal = Decimal("0")      # total_received - expenses
     invoice_count: int = 0
     payment_count: int = 0
+
+# ---------------------------------------------------------------------------
+# Accounts Receivable
+# ---------------------------------------------------------------------------
+
+class ClientARSummary(BaseModel):
+    client_id: UUID
+    client_name: str
+    total_outstanding: Decimal
+    overdue_amount: Decimal
+
+
+class AccountsReceivableReport(BaseModel):
+    total_outstanding: Decimal
+    total_overdue: Decimal
+    aging_not_due: Decimal
+    aging_1_30_days: Decimal
+    aging_31_60_days: Decimal
+    aging_60_plus_days: Decimal
+    by_client: List[ClientARSummary] = []
+
+
+# ---------------------------------------------------------------------------
+# Accounts Payable (Employee Reimbursements)
+# ---------------------------------------------------------------------------
+
+class EmployeeAPSummary(BaseModel):
+    employee_id: UUID
+    employee_name: str
+    total_owed: Decimal
+
+
+class AccountsPayableReport(BaseModel):
+    total_owed: Decimal
+    by_employee: List[EmployeeAPSummary] = []

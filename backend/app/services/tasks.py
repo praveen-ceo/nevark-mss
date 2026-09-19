@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : tasks.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 import uuid
 from datetime import date
 from typing import List, Optional
@@ -88,22 +98,59 @@ async def deactivate_task(db: AsyncSession, task_id: uuid.UUID) -> None:
     log.info("task.deactivated", task_id=str(task_id))
 
 
-async def get_dashboard(db: AsyncSession):
+async def get_dashboard(
+    db: AsyncSession, 
+    dept_ids: set | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    """Task KPI aggregation for the dashboard.
+
+    Filtering semantics (Enhancement 1):
+      Filter path: Task → Assignee → Employee → Department
+      Rationale: task metrics measure which department's employees are
+      working on tasks. This is intentionally distinct from the project
+      department path (Project.department_id) used for project/finance metrics.
+      Tasks without an assignee, or whose assignee has no department_id,
+      are excluded from filtered counts.
+
+    Parameters
+    ----------
+    dept_ids:
+        When provided, restricts counts to tasks assigned to employees
+        whose department_id is in dept_ids. When None, all tasks counted.
+    """
     from app.schemas.tasks import TaskDashboard
+    from app.models.employee import Employee
     today = date.today()
 
+    def _apply_filters(q):
+        if dept_ids is not None:
+            q = (
+                q
+                .join(Employee, Employee.id == ProjectTask.assignee_id)
+                .where(Employee.department_id.in_(dept_ids))
+            )
+        if start_date and end_date:
+            from datetime import timedelta
+            q = q.where(ProjectTask.created_at >= start_date).where(ProjectTask.created_at < end_date + timedelta(days=1))
+        return q
+
     rows = await db.execute(
-        select(ProjectTask.status, func.count(ProjectTask.id))
-        .where(ProjectTask.is_active == True)
-        .group_by(ProjectTask.status)
+        _apply_filters(
+            select(ProjectTask.status, func.count(ProjectTask.id))
+            .where(ProjectTask.is_active == True)
+        ).group_by(ProjectTask.status)
     )
     counts = {row[0]: row[1] for row in rows.all()}
 
     overdue_count = await db.scalar(
-        select(func.count(ProjectTask.id))
-        .where(ProjectTask.is_active == True)
-        .where(ProjectTask.due_date < today)
-        .where(ProjectTask.status != TaskStatus.DONE)
+        _apply_filters(
+            select(func.count(ProjectTask.id))
+            .where(ProjectTask.is_active == True)
+            .where(ProjectTask.due_date < today)
+            .where(ProjectTask.status != TaskStatus.DONE)
+        )
     )
 
     total = sum(counts.values())
@@ -115,6 +162,7 @@ async def get_dashboard(db: AsyncSession):
         todo=counts.get(TaskStatus.TODO, 0),
         blocked=counts.get(TaskStatus.BLOCKED, 0),
     )
+
 
 
 async def list_milestones(

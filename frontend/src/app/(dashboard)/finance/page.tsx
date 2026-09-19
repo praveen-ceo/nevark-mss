@@ -1,4 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+// ============================================================
+// Nevark Technologies Pvt. Ltd.
+// All rights reserved © 2026 Nevark Technologies.
+// Unauthorized use, reproduction, or distribution of this
+// code is strictly prohibited.
+// Module  : page.tsx
+// Author  : Development Team
+// Created : 2026-09-05 15:08:00
+// ============================================================
+
 
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,6 +27,8 @@ import { apiClient } from "@/lib/api/client";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { cn } from "@/lib/utils";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
+import { OrgFilterBar } from "@/components/dashboard/OrgFilterBar";
+import { IncomeView, ExpensesView, ProfitLossView, CashFlowView, AccountsReceivableView, EmployeePayablesView } from "@/components/finance/FinanceModules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,14 +100,36 @@ interface ProjectFinanceSummary {
   payment_count: number;
 }
 
+interface Expense {
+  id: string; category: string; amount: number; currency: string; date: string; description: string | null; status: string;
+  employee: { first_name: string; last_name: string } | null;
+  project: ProjectBrief | null;
+}
+interface MonthlyRevenue { month: string; revenue: number; expenses: number; profit: number; }
+interface CashFlowPoint { month: string; inflow: number; outflow: number; net_cash: number; is_forecast: boolean; }
+interface FinanceTrends { monthly_revenue: MonthlyRevenue[]; cash_flow: CashFlowPoint[]; forecast_available: boolean; }
+
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
 
 type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "cancelled";
-type FinanceTab = InvoiceStatus | "all" | "project_finance";
+type FinanceTab = "income" | "expenses" | "profit_loss" | "cash_flow" | "invoices" | "project_finance" | "accounts_receivable" | "accounts_payable";
+
+// Accounts Receivable Interfaces
+interface ClientARSummary { client_id: string; client_name: string; total_outstanding: number; overdue_amount: number; }
+interface AccountsReceivableReport { total_outstanding: number; total_overdue: number; aging_not_due: number; aging_1_30_days: number; aging_31_60_days: number; aging_60_plus_days: number; by_client: ClientARSummary[]; }
+
+// Accounts Payable Interfaces
+interface EmployeeAPSummary { employee_id: string; employee_name: string; total_owed: number; }
+interface AccountsPayableReport { total_owed: number; by_employee: EmployeeAPSummary[]; }
 
 const api = {
+  trends:          (p: any) => apiClient.get<FinanceTrends>("/finance/trends", { params: { group_id: p.groupId, business_unit_id: p.businessUnitId, start_date: p.startDate, end_date: p.endDate } }).then(r => r.data),
+  accountsReceivable: (p: any) => apiClient.get<AccountsReceivableReport>("/finance/accounts-receivable", { params: { group_id: p.groupId, business_unit_id: p.businessUnitId, start_date: p.startDate, end_date: p.endDate } }).then(r => r.data),
+  employeePayables:   (p: any) => apiClient.get<AccountsPayableReport>("/finance/employee-payables", { params: { group_id: p.groupId, business_unit_id: p.businessUnitId, start_date: p.startDate, end_date: p.endDate } }).then(r => r.data),
+  expenses:        (p: any) => apiClient.get<Expense[]>("/finance/expenses", { params: p }).then(r => r.data),
   dashboard:       () => apiClient.get<FinanceDashboard>("/finance/dashboard").then(r => r.data),
   invoices:        (status: InvoiceStatus | "all", search: string) =>
     apiClient.get<Invoice[]>("/finance/invoices", {
@@ -127,15 +162,15 @@ const STATUS_CONFIG: Record<string, { label: string; style: string; dot: string 
   cancelled: { label: "Cancelled", style: "bg-slate-800/60 text-slate-400",     dot: "bg-slate-500"    },
 };
 
-const TAB_LIST: Array<{ key: FinanceTab; label: string }> = [
-  { key: "all",             label: "All"             },
-  { key: "draft",           label: "Draft"           },
-  { key: "sent",            label: "Sent"            },
-  { key: "partial",         label: "Partial"         },
-  { key: "paid",            label: "Paid"            },
-  { key: "overdue",         label: "Overdue"         },
-  { key: "cancelled",       label: "Cancelled"       },
-  { key: "project_finance", label: "Project Finance" },
+const TABS: Array<{ id: FinanceTab; label: string; icon: any }> = [
+  { id: "income", label: "Income", icon: TrendingUp },
+  { id: "expenses", label: "Expenses", icon: TrendingDown },
+  { id: "profit_loss", label: "Profit & Loss", icon: BarChart3 },
+  { id: "cash_flow", label: "Cash Flow", icon: Wallet },
+  { id: "accounts_receivable", label: "Accounts Receivable", icon: FileText },
+  { id: "accounts_payable", label: "Employee Payables", icon: CreditCard },
+  { id: "invoices", label: "Invoices", icon: FileText },
+  { id: "project_finance", label: "Project Finance", icon: BarChart3 },
 ];
 
 const inputCls = "premium-input w-full text-sm px-3 py-2.5 outline-none transition";
@@ -704,7 +739,7 @@ const FinanceCharts = memo(function FinanceCharts({
               : s === "paid" ? dashboard?.paid_count
               : dashboard?.overdue_count;
             return (
-              <button key={s} onClick={() => setTab(s)}
+              <button key={s} onClick={() => setTab("invoices")}
                 className={cn("rounded-xl p-3.5 text-left transition hover:opacity-90", cfg.style)}>
                 <p className="text-xs font-bold uppercase tracking-wide">{cfg.label}</p>
                 <p className="text-2xl font-bold mt-1">{count ?? "—"}</p>
@@ -755,7 +790,7 @@ const InvoiceTable = memo(function InvoiceTable({
   isLoading,
   isError,
   dSearch,
-  tab,
+  invoiceStatus,
   onDetail,
   onSend,
   onPay,
@@ -764,7 +799,7 @@ const InvoiceTable = memo(function InvoiceTable({
   isLoading: boolean;
   isError: boolean;
   dSearch: string;
-  tab: FinanceTab;
+  invoiceStatus: InvoiceStatus | "all";
   onDetail: (inv: Invoice) => void;
   onSend: (inv: Invoice) => void;
   onPay: (inv: Invoice) => void;
@@ -862,7 +897,7 @@ const InvoiceTable = memo(function InvoiceTable({
 
       {!isLoading && invoices.length === 0 && (
         <div className="py-16 text-center text-sm" style={{ color: "#6B7280" }}>
-          {dSearch || tab !== "all" ? "No invoices match your filters." : "No invoices yet. Generate one from a completed project."}
+          {dSearch || invoiceStatus !== "all" ? "No invoices match your filters." : "No invoices yet. Generate one from a completed project."}
         </div>
       )}
 
@@ -1059,12 +1094,13 @@ type ActiveModal =
   | { type: "settings" };
 
 export default function FinancePage() {
-  const [tab, setTab]     = useState<FinanceTab>("all");
+  const [tab, setTab] = useState<FinanceTab>("income");
+  const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus | "all">("all");
+  const [orgFilter, setOrgFilter] = useState<{ groupId: string | null; businessUnitId: string | null; startDate: string | null; endDate: string | null; }>({ groupId: null, businessUnitId: null, startDate: null, endDate: null });
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ActiveModal | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-  // Debounced search — 300ms, replaces manual useRef+setTimeout
   const dSearch = useDebounce(search, 300);
 
   const { data: dashboard } = useQuery({
@@ -1073,10 +1109,22 @@ export default function FinancePage() {
     staleTime: 60_000,
   });
 
+  const { data: trends } = useQuery({
+    queryKey: ["finance-trends", orgFilter],
+    queryFn: () => api.trends(orgFilter),
+    enabled: ["income", "expenses", "profit_loss", "cash_flow"].includes(tab),
+  });
+
+  const { data: allExpenses = [] } = useQuery({
+    queryKey: ["expenses-all"],
+    queryFn: () => api.expenses({}),
+    enabled: tab === "expenses",
+  });
+
   const { data: invoices = [], isLoading, isError } = useQuery({
-    queryKey: ["invoices", tab, dSearch],
-    queryFn: () => api.invoices(tab === "project_finance" ? "all" : tab, dSearch),
-    enabled: tab !== "project_finance",
+    queryKey: ["invoices", invoiceStatus, dSearch],
+    queryFn: () => api.invoices(invoiceStatus, dSearch),
+    enabled: tab === "invoices" || tab === "income",
   });
 
   const { data: projectSummaries = [], isLoading: pfLoading } = useQuery({
@@ -1104,6 +1152,39 @@ export default function FinancePage() {
     [modal]
   );
 
+  const handleExport = useCallback((format: "csv" | "xlsx" | "pdf") => {
+    if (!trends || !trends.monthly_revenue) {
+      showToast("No trend data available to export.", "error");
+      return;
+    }
+    
+    const headers = [
+      "Month", "Revenue (Rs.)", "Expenses (Rs.)", "Net Profit (Rs.)",
+      "Cash Inflow (Rs.)", "Cash Outflow (Rs.)", "Net Cash (Rs.)"
+    ];
+    
+    const rows = trends.monthly_revenue.map((mr) => {
+      const cf = trends.cash_flow?.find(c => c.month === mr.month) || { inflow: 0, outflow: 0, net_cash: 0 };
+      return [
+        mr.month,
+        mr.revenue,
+        mr.expenses,
+        mr.profit,
+        cf.inflow,
+        cf.outflow,
+        cf.net_cash
+      ];
+    });
+
+    const filename = `Finance_Report_${orgFilter.startDate || "All"}_to_${orgFilter.endDate || "All"}`;
+    
+    if (format === "csv") exportCSV(filename, headers, rows);
+    if (format === "xlsx") exportXLSX(filename, headers, rows);
+    if (format === "pdf") exportPDF(filename, "Finance Report", headers, rows);
+    
+    showToast(`${format.toUpperCase()} report generated successfully.`);
+  }, [trends, orgFilter, showToast]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1112,6 +1193,30 @@ export default function FinancePage() {
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#E5E7EB" }}>Finance</h1>
           <p className="text-sm" style={{ color: "#9CA3AF" }}>Invoices, GST, payments and financial performance</p>
         </div>
+
+        {/* Org Filter (only for modules) */}
+        {["income", "expenses", "profit_loss", "cash_flow", "accounts_receivable", "accounts_payable"].includes(tab) && (
+          <div className="flex items-center gap-3">
+            <OrgFilterBar 
+              onFilterChange={(f) => setOrgFilter({ groupId: f.groupId, businessUnitId: f.businessUnitId, startDate: f.startDate, endDate: f.endDate })} 
+            />
+            {/* Export Dropdown / Buttons */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-800/30" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+              <div className="px-2 text-xs font-semibold text-gray-400 flex items-center gap-1 border-r border-gray-700/50">
+                <Download className="w-3.5 h-3.5" /> Export
+              </div>
+              {(["csv", "xlsx", "pdf"] as const).map(fmt => (
+                <button
+                  key={fmt}
+                  onClick={() => handleExport(fmt)}
+                  className="px-2 py-1 text-xs font-medium rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition"
+                >
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <button onClick={openSettings}
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl transition"
@@ -1126,14 +1231,69 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <KPISection dashboard={dashboard} />
+      {/* Tabs Bar */}
+      <div className="premium-surface p-2 flex gap-1.5 overflow-x-auto">
+        {TABS.map(t => {
+          const Icon = t.icon;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={cn("text-xs px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap flex items-center gap-2",
+                tab === t.id
+                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/30"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-white/5")}
+            >
+              <Icon className="w-4 h-4" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Finance Modules Views */}
+      {tab === "income" && <IncomeView trends={trends} invoices={invoices} />}
+      {tab === "expenses" && <ExpensesView trends={trends} expenses={allExpenses} />}
+      {tab === "profit_loss" && <ProfitLossView trends={trends} />}
+      {tab === "cash_flow" && <CashFlowView trends={trends} />}
+
+      {tab === "accounts_receivable" && (
+        <AccountsReceivableView 
+          groupId={orgFilter.groupId} 
+          businessUnitId={orgFilter.businessUnitId} 
+          startDate={orgFilter.startDate} 
+          endDate={orgFilter.endDate} 
+        />
+      )}
+
+      {tab === "accounts_payable" && (
+        <EmployeePayablesView 
+          groupId={orgFilter.groupId} 
+          businessUnitId={orgFilter.businessUnitId} 
+          startDate={orgFilter.startDate} 
+          endDate={orgFilter.endDate} 
+        />
+      )}
+
+      {tab === "invoices" && (
+        <div className="flex gap-2 p-1 rounded-xl bg-gray-800/30 w-max mb-4">
+          {(["all", "draft", "sent", "partial", "paid", "overdue", "cancelled"] as const).map(s => (
+            <button key={s} onClick={() => setInvoiceStatus(s)}
+              className={cn("px-4 py-1.5 text-sm font-medium rounded-lg transition-all",
+                invoiceStatus === s ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200 hover:bg-white/5")}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* KPI Cards (Only for Invoices or Project Finance) */}
+      {["invoices", "project_finance"].includes(tab) && <KPISection dashboard={dashboard} />}
 
       {/* Charts */}
-      <FinanceCharts dashboard={dashboard} setTab={setTab} />
+      {["invoices", "project_finance"].includes(tab) && <FinanceCharts dashboard={dashboard} setTab={setTab} />}
 
       {/* Invoice table / Project Finance */}
-      <div className="premium-surface">
+      {["invoices", "project_finance"].includes(tab) && (
+        <div className="premium-surface">
         {/* Toolbar */}
         <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           {tab !== "project_finance" && (
@@ -1147,23 +1307,7 @@ export default function FinancePage() {
               <span className="text-xs" style={{ color: "#6B7280" }}>{invoices.length} invoices</span>
             </div>
           )}
-          <div className="flex gap-1.5 overflow-x-auto">
-            {TAB_LIST.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className="text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-1"
-                style={tab === t.key
-                  ? { background: "#7C3AED", color: "#fff" }
-                  : t.key === "project_finance"
-                    ? { color: "#8B5CF6", border: "1px solid rgba(124,58,237,0.3)" }
-                    : { color: "#9CA3AF" }}
-                onMouseEnter={e => { if (tab !== t.key) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-                onMouseLeave={e => { if (tab !== t.key) e.currentTarget.style.background = "transparent"; }}
-              >
-                {t.key === "project_finance" && <BarChart3 className="w-3 h-3" />}
-                {t.label}
-              </button>
-            ))}
-          </div>
+
         </div>
 
         {tab !== "project_finance" && (
@@ -1172,7 +1316,7 @@ export default function FinancePage() {
             isLoading={isLoading}
             isError={isError}
             dSearch={dSearch}
-            tab={tab}
+            invoiceStatus={invoiceStatus}
             onDetail={openDetail}
             onSend={openSend}
             onPay={openPay}
@@ -1183,6 +1327,7 @@ export default function FinancePage() {
           <ProjectFinanceSection data={projectSummaries} isLoading={pfLoading} />
         )}
       </div>
+      )}
 
       {/* Modals */}
       <AnimatePresence mode="wait">

@@ -1,5 +1,16 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : finance.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 import uuid
 from typing import List, Optional
+from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -9,7 +20,10 @@ from app.schemas.finance import (
     ExpenseCreate,
     ExpenseResponse,
     FinanceDashboard,
+    FinanceTrends,
     FinanceSettingsResponse,
+    AccountsReceivableReport,
+    AccountsPayableReport,
     FinanceSettingsUpdate,
     InvoiceCreate,
     InvoiceResponse,
@@ -18,6 +32,7 @@ from app.schemas.finance import (
     ProjectFinanceSummary,
 )
 from app.services import finance as svc
+from app.services import analytics as analytics_svc
 import app.services.notifications as notif_svc
 
 router = APIRouter()
@@ -292,6 +307,29 @@ async def get_dashboard(db: DBDep, _: CurrentUser):
         )
 
 
+@router.get("/trends", response_model=FinanceTrends)
+async def get_trends(
+    db: DBDep,
+    _: CurrentUser,
+    group_id: Optional[uuid.UUID] = Query(None),
+    business_unit_id: Optional[uuid.UUID] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date cannot be after end_date")
+    try:
+        dept_ids = await analytics_svc.resolve_dept_ids(db, group_id, business_unit_id)
+        return await svc.get_finance_trends(db, dept_ids=dept_ids, start_date=start_date, end_date=end_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Trends failed: {type(exc).__name__}: {exc}",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Internal helper — enrich invoice with computed fields not in ORM
 # ---------------------------------------------------------------------------
@@ -312,3 +350,50 @@ def _enrich_invoice(inv) -> "InvoiceResponse":
     data.outstanding_amount = outstanding
     data.supply_type = supply_type
     return data
+
+# ---------------------------------------------------------------------------
+# Accounts Receivable and Employee Payables
+# ---------------------------------------------------------------------------
+
+@router.get("/accounts-receivable", response_model=AccountsReceivableReport)
+async def get_accounts_receivable(
+    db: DBDep,
+    _: CurrentUser,
+    group_id: Optional[uuid.UUID] = Query(None),
+    business_unit_id: Optional[uuid.UUID] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    from app.schemas.finance import AccountsReceivableReport
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date cannot be after end_date")
+    try:
+        dept_ids = await analytics_svc.resolve_dept_ids(db, group_id, business_unit_id)
+        return await svc.get_accounts_receivable(db, dept_ids=dept_ids, start_date=start_date, end_date=end_date)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Accounts receivable failed: {type(exc).__name__}: {exc}",
+        )
+
+
+@router.get("/employee-payables", response_model=AccountsPayableReport)
+async def get_employee_payables(
+    db: DBDep,
+    _: CurrentUser,
+    group_id: Optional[uuid.UUID] = Query(None),
+    business_unit_id: Optional[uuid.UUID] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    from app.schemas.finance import AccountsPayableReport
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date cannot be after end_date")
+    try:
+        dept_ids = await analytics_svc.resolve_dept_ids(db, group_id, business_unit_id)
+        return await svc.get_employee_payables(db, dept_ids=dept_ids, start_date=start_date, end_date=end_date)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Employee payables failed: {type(exc).__name__}: {exc}",
+        )

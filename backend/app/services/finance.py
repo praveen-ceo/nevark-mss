@@ -1,3 +1,13 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : finance.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 import random
 import uuid
 from datetime import date, timedelta
@@ -494,48 +504,129 @@ async def reject_expense(
 # Dashboard
 # ---------------------------------------------------------------------------
 
-async def get_dashboard(db: AsyncSession):
-    from app.schemas.finance import FinanceDashboard, InvoiceStatusCount
+async def get_dashboard(
+    db: AsyncSession, 
+    dept_ids: set | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    """Finance KPI aggregation for the dashboard.
 
+    Parameters
+    ----------
+    dept_ids:
+        When provided, restricts invoice metrics to projects whose
+        department_id is in dept_ids, and expense metrics to employees
+        whose department_id is in dept_ids.
+        Projects with NULL department_id are excluded from filtered
+        invoice metrics — this is by design; unattributed projects
+        cannot be reliably assigned to an organisational unit.
+        When None (default), all records are included (global view).
+    """
+    from app.schemas.finance import FinanceDashboard, InvoiceStatusCount
+    from app.models.project import Project
+    from app.models.employee import Employee
+
+    # ------------------------------------------------------------------
     # Revenue collected: sum of paid invoices
-    revenue_result = await db.execute(
+    # ------------------------------------------------------------------
+    rev_q = (
         select(func.sum(Invoice.total_amount))
         .where(Invoice.status == InvoiceStatus.PAID)
         .where(Invoice.is_active == True)
     )
+    if start_date and end_date:
+        rev_q = rev_q.where(Invoice.issue_date >= start_date).where(Invoice.issue_date <= end_date)
+        
+    if dept_ids is not None:
+        rev_q = (
+            rev_q
+            .join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+    revenue_result = await db.execute(rev_q)
     revenue_collected = Decimal(str(revenue_result.scalar_one_or_none() or 0)).quantize(Decimal("0.01"))
 
-    # Pending: sum of outstanding on sent invoices
-    pending_result = await db.execute(
+    # ------------------------------------------------------------------
+    # Pending: outstanding on sent invoices
+    # ------------------------------------------------------------------
+    pend_q = (
         select(func.sum(Invoice.total_amount - Invoice.paid_amount))
         .where(Invoice.status == InvoiceStatus.SENT)
         .where(Invoice.is_active == True)
     )
+    if start_date and end_date:
+        pend_q = pend_q.where(Invoice.issue_date >= start_date).where(Invoice.issue_date <= end_date)
+        
+    if dept_ids is not None:
+        pend_q = (
+            pend_q
+            .join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+    pending_result = await db.execute(pend_q)
     pending_amount = Decimal(str(pending_result.scalar_one_or_none() or 0)).quantize(Decimal("0.01"))
 
+    # ------------------------------------------------------------------
     # Overdue
-    overdue_result = await db.execute(
+    # ------------------------------------------------------------------
+    over_q = (
         select(func.sum(Invoice.total_amount - Invoice.paid_amount))
         .where(Invoice.status == InvoiceStatus.OVERDUE)
         .where(Invoice.is_active == True)
     )
+    if start_date and end_date:
+        over_q = over_q.where(Invoice.issue_date >= start_date).where(Invoice.issue_date <= end_date)
+        
+    if dept_ids is not None:
+        over_q = (
+            over_q
+            .join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+    overdue_result = await db.execute(over_q)
     overdue_amount = Decimal(str(overdue_result.scalar_one_or_none() or 0)).quantize(Decimal("0.01"))
 
+    # ------------------------------------------------------------------
     # Expenses: approved + reimbursed
-    expense_result = await db.execute(
+    # Filtered by employee.department_id when dept_ids provided.
+    # ------------------------------------------------------------------
+    exp_q = (
         select(func.sum(Expense.amount))
         .where(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]))
         .where(Expense.is_active == True)
     )
+    if start_date and end_date:
+        exp_q = exp_q.where(Expense.date >= start_date).where(Expense.date <= end_date)
+        
+    if dept_ids is not None:
+        exp_q = (
+            exp_q
+            .join(Employee, Employee.id == Expense.employee_id)
+            .where(Employee.department_id.in_(dept_ids))
+        )
+    expense_result = await db.execute(exp_q)
     total_expenses = Decimal(str(expense_result.scalar_one_or_none() or 0)).quantize(Decimal("0.01"))
 
     net_profit = (revenue_collected - total_expenses).quantize(Decimal("0.01"))
 
-    # Counts by status
-    counts_result = await db.execute(
+    # ------------------------------------------------------------------
+    # Invoice counts by status (always global — used for badge counts only)
+    # ------------------------------------------------------------------
+    counts_q = (
         select(Invoice.status, func.count(Invoice.id), func.sum(Invoice.total_amount))
         .where(Invoice.is_active == True)
-        .group_by(Invoice.status)
+    )
+    if start_date and end_date:
+        counts_q = counts_q.where(Invoice.issue_date >= start_date).where(Invoice.issue_date <= end_date)
+        
+    # Apply dept filter for counts if we have it, although E1 made it "always global" for counts? 
+    # Wait, the code says "Invoice counts by status (always global — used for badge counts only)".
+    # So I will NOT apply dept_ids, but I SHOULD apply date if a date filter is selected to respect date semantics.
+    # Actually, E1 says "always global", let's apply the date filter to keep badges consistent with the date.
+    
+    counts_result = await db.execute(
+        counts_q.group_by(Invoice.status)
     )
     invoice_counts = [
         InvoiceStatusCount(status=row[0].value, count=row[1], total=Decimal(str(row[2] or 0)))
@@ -555,6 +646,213 @@ async def get_dashboard(db: AsyncSession):
         sent_count=status_map.get("sent", 0),
         paid_count=status_map.get("paid", 0),
         overdue_count=status_map.get("overdue", 0),
+    )
+
+
+
+async def get_finance_trends(
+    db: AsyncSession, 
+    dept_ids: set | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    from sqlalchemy import text
+    from app.schemas.finance import FinanceTrends, MonthlyRevenue, CashFlowPoint
+    from app.models.employee import Employee
+    from app.models.enums import PaymentStatus
+
+    today = date.today()
+
+    # -----------------------------------------------------------------------
+    # 2. Monthly revenue
+    # -----------------------------------------------------------------------
+    if start_date and end_date:
+        # Custom range: show all months covered by the range
+        months_back = 0
+        cursor = end_date.replace(day=1)
+        start_month = start_date.replace(day=1)
+        
+        # Guard against absurdly large ranges in UI by capping it to e.g. 60 months
+        while cursor >= start_month and months_back < 60:
+            months_back += 1
+            if cursor.month == 1:
+                cursor = cursor.replace(year=cursor.year - 1, month=12)
+            else:
+                cursor = cursor.replace(month=cursor.month - 1)
+                
+        month_start = start_month
+        if months_back == 0:
+            months_back = 1
+            month_start = end_date.replace(day=1)
+    else:
+        # Frozen E1 behaviour
+        months_back = 6
+        month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        for _ in range(months_back - 1):
+            month_start = (month_start - timedelta(days=1)).replace(day=1)
+
+    rev_q = (
+        select(
+            func.date_trunc("month", Invoice.issue_date).label("mo"),
+            func.sum(Invoice.total_amount).label("rev"),
+        )
+        .where(Invoice.status == InvoiceStatus.PAID)
+        .where(Invoice.is_active == True)
+    )
+    if start_date and end_date:
+        # For the chart, we must include all data up to the end_date month,
+        # but also bound it so it matches the custom range calculation.
+        # However, custom range month buckets should span month_start to end_date.
+        rev_q = rev_q.where(Invoice.issue_date >= month_start).where(Invoice.issue_date < end_date + timedelta(days=1))
+    else:
+        rev_q = rev_q.where(Invoice.issue_date >= month_start)
+        
+    if dept_ids is not None:
+        rev_q = (
+            rev_q
+            .join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+    rev_rows = await db.execute(
+        rev_q.group_by(text("mo")).order_by(text("mo"))
+    )
+    rev_map = {row.mo.date().replace(day=1): row.rev for row in rev_rows.all()}
+
+    exp_q = (
+        select(
+            func.date_trunc("month", Expense.date).label("mo"),
+            func.sum(Expense.amount).label("exp"),
+        )
+        .where(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]))
+        .where(Expense.is_active == True)
+    )
+    
+    if start_date and end_date:
+        exp_q = exp_q.where(Expense.date >= month_start).where(Expense.date < end_date + timedelta(days=1))
+    else:
+        exp_q = exp_q.where(Expense.date >= month_start)
+        
+    if dept_ids is not None:
+        exp_q = (
+            exp_q
+            .join(Employee, Employee.id == Expense.employee_id)
+            .where(Employee.department_id.in_(dept_ids))
+        )
+    exp_rows = await db.execute(
+        exp_q.group_by(text("mo")).order_by(text("mo"))
+    )
+    exp_map = {row.mo.date().replace(day=1): row.exp for row in exp_rows.all()}
+
+    monthly_revenue: list[MonthlyRevenue] = []
+    cursor = month_start
+    for _ in range(months_back):
+        rev = rev_map.get(cursor, 0) or 0
+        exp = exp_map.get(cursor, 0) or 0
+        monthly_revenue.append(MonthlyRevenue(
+            month=cursor.strftime("%b %Y"),
+            revenue=rev,
+            expenses=exp,
+            profit=rev - exp,
+        ))
+        nxt = cursor.replace(day=28) + timedelta(days=4)
+        cursor = nxt.replace(day=1)
+
+    # -----------------------------------------------------------------------
+    # 2b. Enhancement 7: Cash Flow Forecasting
+    # -----------------------------------------------------------------------
+    current_month_start = today.replace(day=1)
+    base_month_3 = (current_month_start - timedelta(days=1)).replace(day=1)
+    base_month_2 = (base_month_3 - timedelta(days=1)).replace(day=1)
+    base_month_1 = (base_month_2 - timedelta(days=1)).replace(day=1)
+    
+    query_start = min(month_start, base_month_1)
+    if start_date and end_date:
+        query_end = max(end_date + timedelta(days=1), current_month_start)
+    else:
+        query_end = (current_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        
+    cf_in_q = (
+        select(
+            func.date_trunc("month", Payment.payment_date).label("mo"),
+            func.sum(Payment.amount).label("inflow"),
+        )
+        .where(Payment.status == PaymentStatus.COMPLETED)
+        .where(Payment.payment_date >= query_start)
+        .where(Payment.payment_date < query_end)
+    )
+    if dept_ids is not None:
+        cf_in_q = (
+            cf_in_q
+            .join(Invoice, Invoice.id == Payment.invoice_id)
+            .join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+    cf_in_rows = await db.execute(cf_in_q.group_by(text("mo")))
+    inflow_map = {row.mo.date().replace(day=1): row.inflow for row in cf_in_rows.all() if row.mo}
+
+    cf_out_q = (
+        select(
+            func.date_trunc("month", Expense.date).label("mo"),
+            func.sum(Expense.amount).label("outflow"),
+        )
+        .where(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.REIMBURSED]))
+        .where(Expense.is_active == True)
+        .where(Expense.date >= query_start)
+        .where(Expense.date < query_end)
+    )
+    if dept_ids is not None:
+        cf_out_q = (
+            cf_out_q
+            .join(Employee, Employee.id == Expense.employee_id)
+            .where(Employee.department_id.in_(dept_ids))
+        )
+    cf_out_rows = await db.execute(cf_out_q.group_by(text("mo")))
+    outflow_map = {row.mo.date().replace(day=1): row.outflow for row in cf_out_rows.all() if row.mo}
+
+    cash_flow: list[CashFlowPoint] = []
+    
+    cf_cursor = month_start
+    for _ in range(months_back):
+        inf = float(inflow_map.get(cf_cursor, 0) or 0)
+        outf = float(outflow_map.get(cf_cursor, 0) or 0)
+        cash_flow.append(CashFlowPoint(
+            month=cf_cursor.strftime("%b %Y"),
+            inflow=inf,
+            outflow=outf,
+            net_cash=inf - outf,
+            is_forecast=False
+        ))
+        cf_cursor = (cf_cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+        
+    base_inf_1 = float(inflow_map.get(base_month_1, 0) or 0)
+    base_out_1 = float(outflow_map.get(base_month_1, 0) or 0)
+    base_inf_2 = float(inflow_map.get(base_month_2, 0) or 0)
+    base_out_2 = float(outflow_map.get(base_month_2, 0) or 0)
+    base_inf_3 = float(inflow_map.get(base_month_3, 0) or 0)
+    base_out_3 = float(outflow_map.get(base_month_3, 0) or 0)
+    
+    total_base = base_inf_1 + base_out_1 + base_inf_2 + base_out_2 + base_inf_3 + base_out_3
+    forecast_available = total_base > 0
+    
+    if forecast_available:
+        avg_inf = (base_inf_1 + base_inf_2 + base_inf_3) / 3.0
+        avg_out = (base_out_1 + base_out_2 + base_out_3) / 3.0
+        
+        fc_cursor = current_month_start
+        for _ in range(3):
+            cash_flow.append(CashFlowPoint(
+                month=fc_cursor.strftime("%b %Y"),
+                inflow=avg_inf,
+                outflow=avg_out,
+                net_cash=avg_inf - avg_out,
+                is_forecast=True
+            ))
+            fc_cursor = (fc_cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    return FinanceTrends(
+        monthly_revenue=monthly_revenue,
+        cash_flow=cash_flow,
+        forecast_available=forecast_available
     )
 
 
@@ -716,4 +1014,168 @@ async def get_project_finance_summary(db: AsyncSession, project_id: uuid.UUID):
         estimated_profit=profit,
         invoice_count=invoice_count,
         payment_count=payment_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Accounts Receivable
+# ---------------------------------------------------------------------------
+
+async def get_accounts_receivable(
+    db: AsyncSession,
+    dept_ids: set | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    from app.schemas.finance import AccountsReceivableReport, ClientARSummary
+    from app.models.client import Client
+    from app.models.project import Project
+
+    # Base query for invoices that are AR
+    q = (
+        select(
+            Client.id.label("client_id"),
+            Client.name.label("client_name"),
+            Invoice.due_date,
+            (Invoice.total_amount - Invoice.paid_amount).label("outstanding")
+        )
+        .select_from(Invoice)
+        .join(Client, Client.id == Invoice.client_id)
+        .where(Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]))
+        .where(Invoice.is_active == True)
+        .where((Invoice.total_amount - Invoice.paid_amount) > 0)
+    )
+
+    if start_date and end_date:
+        q = q.where(Invoice.issue_date >= start_date).where(Invoice.issue_date <= end_date)
+
+    if dept_ids is not None:
+        q = (
+            q.join(Project, Project.id == Invoice.project_id)
+            .where(Project.department_id.in_(dept_ids))
+        )
+
+    result = await db.execute(q)
+    rows = result.all()
+
+    total_outstanding = Decimal("0")
+    total_overdue = Decimal("0")
+    aging_not_due = Decimal("0")
+    aging_1_30 = Decimal("0")
+    aging_31_60 = Decimal("0")
+    aging_60_plus = Decimal("0")
+
+    client_map = {}
+
+    today = date.today()
+
+    for row in rows:
+        outstanding = Decimal(str(row.outstanding))
+        total_outstanding += outstanding
+
+        # Aging
+        days_diff = (today - row.due_date).days
+        is_overdue = days_diff > 0
+
+        if is_overdue:
+            total_overdue += outstanding
+            if days_diff <= 30:
+                aging_1_30 += outstanding
+            elif days_diff <= 60:
+                aging_31_60 += outstanding
+            else:
+                aging_60_plus += outstanding
+        else:
+            aging_not_due += outstanding
+
+        # Client grouping
+        if row.client_id not in client_map:
+            client_map[row.client_id] = {
+                "client_id": row.client_id,
+                "client_name": row.client_name,
+                "total_outstanding": Decimal("0"),
+                "overdue_amount": Decimal("0")
+            }
+        
+        client_map[row.client_id]["total_outstanding"] += outstanding
+        if is_overdue:
+            client_map[row.client_id]["overdue_amount"] += outstanding
+
+    by_client = []
+    for c in client_map.values():
+        by_client.append(ClientARSummary(
+            client_id=c["client_id"],
+            client_name=c["client_name"],
+            total_outstanding=c["total_outstanding"].quantize(Decimal("0.01")),
+            overdue_amount=c["overdue_amount"].quantize(Decimal("0.01"))
+        ))
+    
+    # Sort by total outstanding desc
+    by_client.sort(key=lambda x: x.total_outstanding, reverse=True)
+
+    return AccountsReceivableReport(
+        total_outstanding=total_outstanding.quantize(Decimal("0.01")),
+        total_overdue=total_overdue.quantize(Decimal("0.01")),
+        aging_not_due=aging_not_due.quantize(Decimal("0.01")),
+        aging_1_30_days=aging_1_30.quantize(Decimal("0.01")),
+        aging_31_60_days=aging_31_60.quantize(Decimal("0.01")),
+        aging_60_plus_days=aging_60_plus.quantize(Decimal("0.01")),
+        by_client=by_client
+    )
+
+
+# ---------------------------------------------------------------------------
+# Accounts Payable (Employee Reimbursements)
+# ---------------------------------------------------------------------------
+
+async def get_employee_payables(
+    db: AsyncSession,
+    dept_ids: set | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    from app.schemas.finance import AccountsPayableReport, EmployeeAPSummary
+    from app.models.employee import Employee
+
+    q = (
+        select(
+            Employee.id.label("employee_id"),
+            Employee.first_name,
+            Employee.last_name,
+            func.sum(Expense.amount).label("total_owed")
+        )
+        .select_from(Expense)
+        .join(Employee, Employee.id == Expense.employee_id)
+        .where(Expense.status == ExpenseStatus.APPROVED)
+        .where(Expense.is_active == True)
+        .group_by(Employee.id, Employee.first_name, Employee.last_name)
+    )
+
+    if start_date and end_date:
+        q = q.where(Expense.date >= start_date).where(Expense.date <= end_date)
+
+    if dept_ids is not None:
+        q = q.where(Employee.department_id.in_(dept_ids))
+
+    result = await db.execute(q)
+    rows = result.all()
+
+    total_owed = Decimal("0")
+    by_employee = []
+
+    for row in rows:
+        amt = Decimal(str(row.total_owed)).quantize(Decimal("0.01"))
+        total_owed += amt
+        name = f"{row.first_name} {row.last_name}".strip()
+        by_employee.append(EmployeeAPSummary(
+            employee_id=row.employee_id,
+            employee_name=name,
+            total_owed=amt
+        ))
+    
+    by_employee.sort(key=lambda x: x.total_owed, reverse=True)
+
+    return AccountsPayableReport(
+        total_owed=total_owed.quantize(Decimal("0.01")),
+        by_employee=by_employee
     )

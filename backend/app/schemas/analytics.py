@@ -1,20 +1,51 @@
+# ============================================================
+# Nevark Technologies Pvt. Ltd.
+# All rights reserved © 2026 Nevark Technologies.
+# Unauthorized use, reproduction, or distribution of this
+# code is strictly prohibited.
+# Module  : analytics.py
+# Author  : Development Team
+# Created : 2026-09-05 15:08:00
+# ============================================================
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Re-import composites from existing schemas
-from app.schemas.finance import FinanceDashboard
+from app.schemas.finance import FinanceDashboard, MonthlyRevenue, CashFlowPoint
 from app.schemas.tasks import TaskDashboard
 
+class ExpenseAnomaly(BaseModel):
+    expense_id: UUID
+    category: str
+    amount: Decimal
+    date: date
+    employee_name: str
+    description: Optional[str] = None
 
-class MonthlyRevenue(BaseModel):
-    month: str          # e.g. "Jan 2025"
-    revenue: Decimal
-    expenses: Decimal
-    profit: Decimal
+
+class ProjectRisk(BaseModel):
+    project_id: UUID
+    name: str
+    risk_level: str
+    reasons: List[str]
+
+
+class EmployeeProductivity(BaseModel):
+    employee_id: UUID
+    employee_name: str
+    assigned_tasks: int
+    completed_tasks: int
+    completion_rate: Optional[float]
+    overdue_tasks: int
+    blocked_tasks: int
+
+
+
 
 
 class StatusCount(BaseModel):
@@ -46,7 +77,12 @@ class DeadlineItem(BaseModel):
 class DashboardAnalytics(BaseModel):
     # Finance — from finance.get_dashboard()
     finance: FinanceDashboard
-    monthly_revenue: List[MonthlyRevenue] = []
+    monthly_revenue: List[MonthlyRevenue] = Field(default_factory=list)
+    cash_flow: List[CashFlowPoint] = Field(default_factory=list)
+    forecast_available: bool = True
+    expense_anomalies: List[ExpenseAnomaly] = Field(default_factory=list)
+    project_risks: List[ProjectRisk] = Field(default_factory=list)
+    employee_productivity: List[EmployeeProductivity] = Field(default_factory=list)
 
     # Projects
     total_projects: int
